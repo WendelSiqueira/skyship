@@ -456,6 +456,7 @@ mod tests {
         assert!(c.confine_paths(&d).is_err());
     }
 
+    #[cfg(unix)]
     #[test]
     fn symlink_pointing_outside_is_rejected() {
         let d = project();
