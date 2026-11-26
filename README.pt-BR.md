@@ -8,10 +8,6 @@ O skyship pega uma pasta com um `Dockerfile`, monta a imagem no seu computador, 
 e devolve um endereço público. Foi feito para quem não está acostumado com serviços de nuvem: ele
 explica cada passo e remove tudo quando você terminar, para a cobrança parar.
 
-> **Fase inicial.** Um deploy completo no Lightsail já foi concluído numa conta de verdade, pelo app
-> de desktop (um site estático pequeno). **Ele não foi repetido nem testado com outros tipos de app.**
-> Não dependa disso para nada importante. Veja [o que funciona hoje](#o-que-funciona-hoje).
-
 ## Como funciona
 
 1. **Conecte a sua conta de nuvem.** O skyship diz exatamente quais permissões dar a ele.
@@ -74,9 +70,9 @@ inglês).
 | `doctor` | Funciona. Usado com uma conta real. |
 | `login` | Escrito e a parte que grava o arquivo está testada, mas ainda não foi usado de forma interativa numa conta real. |
 | `status` | Funciona no Lightsail. |
-| `deploy` no Lightsail | Concluído uma vez, pelo app de desktop, com um site estático pequeno (contas novas podem ter limite zero de container services; talvez seja preciso pedir aumento à AWS). Não foi repetido nem testado com outros apps. |
+| `deploy` no Lightsail | Funciona pelo app de desktop com um site estático pequeno, inclusive atualizar um app que já existe (contas novas podem ter limite zero de container services; talvez seja preciso pedir aumento à AWS). Não foi testado com outros apps. |
 | `deploy` na EC2 | Escrito, **nunca executado**. |
-| App de desktop | Compila e roda. Um deploy no Lightsail foi concluído por ele, e a lista de apps foi vista numa conta de verdade. Atualizar um app, remover pela lista, a verificação com o Trivy e publicar a partir de uma imagem local ou de um arquivo compactado só foram conferidos com um backend de mentira. |
+| App de desktop | Compila e roda. Publicar e atualizar um site estático pequeno no Lightsail, a lista de apps e a tag do skyship foram feitos numa conta de verdade. Remover pela lista, a verificação com o Trivy e publicar a partir de uma imagem local ou de um arquivo compactado só foram conferidos com um backend de mentira. |
 
 ## Perguntas
 
