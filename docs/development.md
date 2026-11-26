@@ -57,6 +57,41 @@ are accepted but never run. So the deploy flows cannot be validated this way, an
 by us cannot confirm the guesses listed under [Known gaps](#known-gaps) (the Lightsail registry
 path and the required permissions). Those need a real account.
 
+## Continuous integration and releases
+
+Everything is in `.github/`; actions are pinned by commit hash (Dependabot proposes the updates).
+
+- **`ci.yml`**, on every pull request and on `main`:
+  - `core`: `cargo clippy --locked --all-targets -- -D warnings`, `cargo test --locked`, `cargo build --locked`
+  - `gui`: the same for `skyship-gui` (installs the WebKitGTK 4.1 development packages)
+  - `ui`: `node scripts/check-ui.mjs` (syntax of the frontend, the three languages have the same
+    texts, every text key and element id used actually exists)
+- **`audit.yml`**: `cargo audit`, when the dependencies change, on `main` and every Monday.
+  Vulnerabilities fail it; the informational warnings from Tauri/GTK
+  (see [security.md](security.md)) do not.
+- **`release.yml`**: runs when a tag `vX.Y.Z` is pushed. It checks that the tag equals the workspace
+  version and that its commit is on `main`, runs the tests, builds `skyship` and `skyship-gui` in
+  release mode on Ubuntu 22.04, and creates a **draft** release with
+  `skyship-vX.Y.Z-x86_64-linux.tar.gz` and its `.sha256` (both programs, the licenses, the READMEs
+  and the terms). Publishing the draft is a manual step. The package carries a build provenance
+attestation signed by GitHub (which workflow, which commit); check a download with
+`gh attestation verify skyship-vX.Y.Z-x86_64-linux.tar.gz --repo WendelSiqueira/skyship`. The
+binaries themselves are not code-signed.
+
+To make a release: raise `version` in the root `Cargo.toml` through a pull request, merge it, tag
+that commit on `main` (`git tag vX.Y.Z && git push origin vX.Y.Z`), then review and publish the draft.
+
+Run the same checks locally before opening a pull request:
+
+```bash
+cargo clippy --all-targets -- -D warnings && cargo test
+cargo clippy --all-targets -p skyship-gui -- -D warnings && cargo test -p skyship-gui
+node scripts/check-ui.mjs
+```
+
+`rustfmt` is not enforced: the code was not written with it, so turning it on is a separate,
+purely mechanical change.
+
 ## Licenses
 
 skyship is `MIT OR Apache-2.0` (`LICENSE-MIT`, `LICENSE-APACHE`, `license` in the workspace
@@ -73,7 +108,8 @@ with `cargo metadata --format-version 1 | jq -r '.packages[] | "\(.name) \(.lice
 - **New AWS regions** are added to `crates/core/src/regions.rs`.
 - **New `aws-sdk-*` crates** must use `default-features = false` (see [security.md](security.md)).
 - Run `cargo audit` after changing dependencies.
-- Texts shown to the user go in `crates/gui/ui/i18n.js`, in all three languages.
+- Texts shown to the user go in `crates/gui/ui/i18n.js`, in all three languages
+  (`node scripts/check-ui.mjs` fails otherwise).
 - When the terms of use change, update `TERMS.md`, `TERMS.pt-BR.md` and the `t.s*` texts in
   `i18n.js`, and bump `TERMS_VERSION` in `ui/app.js` so the app asks for acceptance again.
 
