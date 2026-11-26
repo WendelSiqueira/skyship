@@ -67,8 +67,19 @@ mod tests {
     #[test]
     fn codes_are_unique_and_well_formed() {
         for (i, a) in REGIONS.iter().enumerate() {
-            assert!(!a.code.is_empty() && a.code.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'), "{}", a.code);
-            assert!(REGIONS[i + 1..].iter().all(|b| b.code != a.code), "duplicada: {}", a.code);
+            assert!(
+                !a.code.is_empty()
+                    && a.code
+                        .chars()
+                        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'),
+                "{}",
+                a.code
+            );
+            assert!(
+                REGIONS[i + 1..].iter().all(|b| b.code != a.code),
+                "duplicada: {}",
+                a.code
+            );
         }
     }
 

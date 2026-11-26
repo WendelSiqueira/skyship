@@ -34,14 +34,20 @@ impl Aws {
         if let Some(p) = profile {
             loader = loader.profile_name(p);
         }
-        Self { sdk: loader.load().await }
+        Self {
+            sdk: loader.load().await,
+        }
     }
 
     /// Número da conta AWS; falha se as credenciais forem inválidas ou estiverem ausentes.
     pub async fn account(&self) -> Result<String> {
-        let id = aws_sdk_sts::Client::new(&self.sdk).get_caller_identity().send().await.map_err(|e| {
-            anyhow::anyhow!("credenciais AWS inválidas ou ausentes (AWS_PROFILE / AWS_ACCESS_KEY_ID...): {e}")
-        })?;
+        let id = aws_sdk_sts::Client::new(&self.sdk)
+            .get_caller_identity()
+            .send()
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!("credenciais AWS inválidas ou ausentes (AWS_PROFILE / AWS_ACCESS_KEY_ID...): {e}")
+            })?;
         Ok(id.account().unwrap_or_default().to_string())
     }
 }
@@ -132,10 +138,18 @@ pub async fn deploy(aws: &Aws, cfg: &Config, progress: &Progress) -> Result<Outc
 /// Erro devolvido por [`destroy_app`] quando o app não tem a tag do skyship e não foi liberado apagar.
 pub const ERR_UNMANAGED: &str = "unmanaged";
 
-pub async fn destroy_app(aws: &Aws, name: &str, region: &str, target: Target, allow_unmanaged: bool, progress: &Progress) -> Result<()> {
+pub async fn destroy_app(
+    aws: &Aws,
+    name: &str,
+    region: &str,
+    target: Target,
+    allow_unmanaged: bool,
+    progress: &Progress,
+) -> Result<()> {
     let cfg = Config::new(name.to_string(), region.to_string(), 80, target);
     cfg.validate()?;
-    if target == Target::Lightsail && !allow_unmanaged && lightsail::managed(&aws.sdk, &cfg.name).await? == Some(false) {
+    if target == Target::Lightsail && !allow_unmanaged && lightsail::managed(&aws.sdk, &cfg.name).await? == Some(false)
+    {
         anyhow::bail!(ERR_UNMANAGED);
     }
     destroy(aws, &cfg, progress).await

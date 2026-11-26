@@ -23,14 +23,24 @@ pub enum Stage {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Event {
-    StageStarted { stage: Stage },
-    StageDone { stage: Stage },
+    StageStarted {
+        stage: Stage,
+    },
+    StageDone {
+        stage: Stage,
+    },
     /// Linha de log técnico (saída do docker, detalhes da AWS)
-    Log { line: String },
+    Log {
+        line: String,
+    },
     /// Fim do deploy com sucesso
-    Done { url: Option<String> },
+    Done {
+        url: Option<String>,
+    },
     /// O deploy falhou (quem chama emite isto a partir do `Err` de [`crate::deploy`])
-    Failed { message: String },
+    Failed {
+        message: String,
+    },
     /// O usuário cancelou o deploy
     Cancelled,
 }

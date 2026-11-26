@@ -1,5 +1,5 @@
 use crate::progress::Progress;
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWriteExt, BufReader};
 use tokio::process::Command;
@@ -18,7 +18,15 @@ pub async fn available() -> bool {
 pub async fn build(image: &str, dockerfile: &str, context: &str, platform: &str, p: &Progress) -> Result<()> {
     run(
         Command::new("docker").args([
-            "build", "--progress=plain", "--platform", platform, "-f", dockerfile, "-t", image, context,
+            "build",
+            "--progress=plain",
+            "--platform",
+            platform,
+            "-f",
+            dockerfile,
+            "-t",
+            image,
+            context,
         ]),
         p,
     )
@@ -69,7 +77,13 @@ pub async fn push(image: &str, p: &Progress) -> Result<()> {
 /// Digest (sha256:...) que o registry atribuiu à imagem depois do push.
 pub async fn repo_digest(image: &str, registry: &str) -> Result<String> {
     let out = Command::new("docker")
-        .args(["image", "inspect", image, "--format", "{{range .RepoDigests}}{{println .}}{{end}}"])
+        .args([
+            "image",
+            "inspect",
+            image,
+            "--format",
+            "{{range .RepoDigests}}{{println .}}{{end}}",
+        ])
         .output()
         .await
         .context("falha ao executar docker")?;
@@ -80,7 +94,6 @@ pub async fn repo_digest(image: &str, registry: &str) -> Result<String> {
         .map(|(_, d)| d.to_string())
         .context("não achei o digest da imagem após o push")
 }
-
 
 pub async fn login(registry: &str, user: &str, password: &str, p: &Progress) -> Result<()> {
     let mut child = Command::new("docker")

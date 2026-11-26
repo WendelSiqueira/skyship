@@ -5,7 +5,7 @@
 //! links simbólicos e arquivos especiais são recusados ou descartados, e há limites de tamanho e de
 //! quantidade de arquivos contra "bombas de descompressão".
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use std::fs::{self, File};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
@@ -21,7 +21,10 @@ pub struct Limits {
 
 impl Default for Limits {
     fn default() -> Self {
-        Self { max_bytes: 1 << 30, max_files: 20_000 }
+        Self {
+            max_bytes: 1 << 30,
+            max_files: 20_000,
+        }
     }
 }
 
@@ -53,7 +56,9 @@ pub fn kind(path: &Path) -> Option<Kind> {
 pub fn new_dest_dir() -> Result<PathBuf> {
     use std::sync::atomic::{AtomicUsize, Ordering};
     static N: AtomicUsize = AtomicUsize::new(0);
-    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos();
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_nanos();
     let dir = std::env::temp_dir().join(format!(
         "skyship-archive-{}-{nanos}-{}",
         std::process::id(),
@@ -62,13 +67,16 @@ pub fn new_dest_dir() -> Result<PathBuf> {
     let mut b = fs::DirBuilder::new();
     #[cfg(unix)]
     std::os::unix::fs::DirBuilderExt::mode(&mut b, 0o700);
-    b.create(&dir).with_context(|| format!("não consegui criar {}", dir.display()))?;
+    b.create(&dir)
+        .with_context(|| format!("não consegui criar {}", dir.display()))?;
     Ok(dir)
 }
 
 /// Remove extrações antigas (`skyship-archive-*`) deixadas na pasta temporária.
 pub fn cleanup_old() {
-    let Ok(rd) = fs::read_dir(std::env::temp_dir()) else { return };
+    let Ok(rd) = fs::read_dir(std::env::temp_dir()) else {
+        return;
+    };
     for e in rd.flatten() {
         if e.file_name().to_string_lossy().starts_with("skyship-archive-") {
             let _ = fs::remove_dir_all(e.path());
@@ -112,13 +120,20 @@ fn set_mode(_: &Path, _: u32) {}
 fn extract_zip(archive: &Path, dest: &Path, limits: Limits) -> Result<()> {
     let mut zip = zip::ZipArchive::new(File::open(archive)?).context("zip inválido")?;
     if zip.len() > limits.max_files {
-        bail!("o arquivo tem arquivos demais ({}; o limite é {})", zip.len(), limits.max_files);
+        bail!(
+            "o arquivo tem arquivos demais ({}; o limite é {})",
+            zip.len(),
+            limits.max_files
+        );
     }
     let mut total = 0u64;
     for i in 0..zip.len() {
         let mut f = zip.by_index(i)?;
         let Some(rel) = f.enclosed_name() else {
-            bail!("caminho inseguro dentro do arquivo: {}", f.name().map(|n| n.to_string()).unwrap_or_default());
+            bail!(
+                "caminho inseguro dentro do arquivo: {}",
+                f.name().map(|n| n.to_string()).unwrap_or_default()
+            );
         };
         if f.is_symlink() {
             continue; // links simbólicos não são extraídos
@@ -138,7 +153,10 @@ fn extract_zip(archive: &Path, dest: &Path, limits: Limits) -> Result<()> {
         let n = io::copy(&mut (&mut f).take(room + 1), &mut w)?;
         total += n;
         if total > limits.max_bytes {
-            bail!("o conteúdo descompactado passa do limite de {} MB", limits.max_bytes >> 20);
+            bail!(
+                "o conteúdo descompactado passa do limite de {} MB",
+                limits.max_bytes >> 20
+            );
         }
         if let Some(m) = mode {
             set_mode(&out, m);
@@ -165,7 +183,10 @@ fn extract_tar<R: Read>(reader: R, dest: &Path, limits: Limits) -> Result<()> {
         }
         total = total.saturating_add(entry.header().size().unwrap_or(0));
         if total > limits.max_bytes {
-            bail!("o conteúdo descompactado passa do limite de {} MB", limits.max_bytes >> 20);
+            bail!(
+                "o conteúdo descompactado passa do limite de {} MB",
+                limits.max_bytes >> 20
+            );
         }
         let mode = entry.header().mode().ok();
         let rel = entry.path()?.into_owned();
@@ -193,7 +214,9 @@ fn extract_rar(archive: &Path, dest: &Path) -> Result<()> {
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|_| anyhow::anyhow!("para abrir .rar é preciso o `bsdtar` (pacote libarchive) instalado; ou use .zip / .tar.gz"))?;
+        .map_err(|_| {
+            anyhow::anyhow!("para abrir .rar é preciso o `bsdtar` (pacote libarchive) instalado; ou use .zip / .tar.gz")
+        })?;
     let (tx, rx) = std::sync::mpsc::channel();
     let handle = std::thread::spawn(move || {
         let _ = tx.send(child.wait_with_output());
@@ -203,7 +226,10 @@ fn extract_rar(archive: &Path, dest: &Path) -> Result<()> {
         .map_err(|_| anyhow::anyhow!("o bsdtar demorou demais para abrir o arquivo"))??;
     let _ = handle.join();
     if !out.status.success() {
-        bail!("não consegui abrir o .rar: {}", String::from_utf8_lossy(&out.stderr).trim());
+        bail!(
+            "não consegui abrir o .rar: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
     }
     Ok(())
 }
@@ -222,7 +248,10 @@ fn sanitize(dir: &Path, limits: Limits) -> Result<()> {
                 *files += 1;
                 *bytes += meta.len();
                 if *files > limits.max_files || *bytes > limits.max_bytes {
-                    bail!("o conteúdo extraído passa dos limites (arquivos: {files}, MB: {})", *bytes >> 20);
+                    bail!(
+                        "o conteúdo extraído passa dos limites (arquivos: {files}, MB: {})",
+                        *bytes >> 20
+                    );
                 }
             }
         }
@@ -277,7 +306,13 @@ mod tests {
     fn zip_with_single_root_folder_returns_that_folder() {
         let d = tmp();
         let z = d.join("p.zip");
-        make_zip(&z, &[("meuapp/Dockerfile", b"FROM scratch\n"), ("meuapp/index.html", b"<h1>oi</h1>")]);
+        make_zip(
+            &z,
+            &[
+                ("meuapp/Dockerfile", b"FROM scratch\n"),
+                ("meuapp/index.html", b"<h1>oi</h1>"),
+            ],
+        );
         let out = tmp();
         let root = extract(&z, &out, Limits::default()).unwrap();
         assert!(root.ends_with("meuapp"));
@@ -341,9 +376,29 @@ mod tests {
         let z = d.join("big.zip");
         make_zip(&z, &[("a", &[0u8; 5000]), ("b", &[0u8; 5000])]);
         let out = tmp();
-        assert!(extract(&z, &out, Limits { max_bytes: 6000, max_files: 10 }).is_err());
+        assert!(
+            extract(
+                &z,
+                &out,
+                Limits {
+                    max_bytes: 6000,
+                    max_files: 10
+                }
+            )
+            .is_err()
+        );
         let out2 = tmp();
-        assert!(extract(&z, &out2, Limits { max_bytes: 1 << 20, max_files: 1 }).is_err());
+        assert!(
+            extract(
+                &z,
+                &out2,
+                Limits {
+                    max_bytes: 1 << 20,
+                    max_files: 1
+                }
+            )
+            .is_err()
+        );
     }
 
     #[test]
