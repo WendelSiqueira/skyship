@@ -173,10 +173,10 @@ fn extract_tar<R: Read>(reader: R, dest: &Path, limits: Limits) -> Result<()> {
         if !entry.unpack_in(dest)? {
             bail!("caminho inseguro dentro do arquivo: {}", rel.display());
         }
-        if ty != EntryType::Directory {
-            if let Some(m) = mode {
-                set_mode(&dest.join(&rel), m);
-            }
+        if ty != EntryType::Directory
+            && let Some(m) = mode
+        {
+            set_mode(&dest.join(&rel), m);
         }
     }
     Ok(())

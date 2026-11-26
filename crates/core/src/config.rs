@@ -184,10 +184,10 @@ impl Config {
         if self.port == 0 {
             bail!("port deve estar entre 1 e 65535");
         }
-        if let Some(img) = &self.image {
-            if !valid_image_ref(img) {
-                bail!("image inválida: {img:?} (esperava algo como meuapp:1.0)");
-            }
+        if let Some(img) = &self.image
+            && !valid_image_ref(img)
+        {
+            bail!("image inválida: {img:?} (esperava algo como meuapp:1.0)");
         }
         if !valid_platform(&self.platform) {
             bail!("platform inválida: {:?} (esperava algo como linux/amd64)", self.platform);

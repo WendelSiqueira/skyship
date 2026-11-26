@@ -150,12 +150,11 @@ async fn wait_running(ec2: &aws_sdk_ec2::Client, id: &str) -> Result<String> {
     for _ in 0..60 {
         let out = ec2.describe_instances().instance_ids(id).send().await?;
         let inst = out.reservations().first().and_then(|r| r.instances().first());
-        if let Some(i) = inst {
-            if i.state().and_then(|s| s.name()) == Some(&InstanceStateName::Running) {
-                if let Some(ip) = i.public_ip_address() {
-                    return Ok(ip.to_string());
-                }
-            }
+        if let Some(i) = inst
+            && i.state().and_then(|s| s.name()) == Some(&InstanceStateName::Running)
+            && let Some(ip) = i.public_ip_address()
+        {
+            return Ok(ip.to_string());
         }
         sleep(Duration::from_secs(5)).await;
     }
