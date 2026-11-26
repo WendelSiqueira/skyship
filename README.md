@@ -11,8 +11,9 @@ explains each step and can remove everything when you are done, so the bill stop
 ## How it works
 
 1. **Connect your cloud account.** skyship tells you exactly which permissions to give it.
-2. **Pick your app.** A project folder with a `Dockerfile`, a compressed file (`.zip`, `.tar.gz`)
-   with one inside, or (in the desktop app) an image that already exists in your local Docker.
+2. **Pick your app.** A project folder with a `Dockerfile` or, in the desktop app, a compressed file
+   (`.zip`, `.tar`, `.tar.gz`, or `.rar` if `bsdtar` is installed) with one inside, or an image that
+   already exists in your local Docker.
 3. **Publish.** skyship builds, uploads and starts your app.
 4. **Open the address** it gives you. To update the app, publish again with the same name. When you
    no longer need it, remove it (`skyship destroy`, or the Remove button in the desktop app).
@@ -68,10 +69,10 @@ needs. Step by step instructions are in [docs/permissions.md](docs/permissions.m
 | `init`, `policy`, `regions` | Work. |
 | `doctor` | Works. Used with a real account. |
 | `login` | Written and its file handling is tested, but it has not been used interactively on a real account yet. |
-| `status` | Works against Lightsail. |
-| `deploy` to Lightsail | Works from the desktop app with a small static site, including updating an app that already exists (new accounts can have a limit of zero container services; you may need to ask AWS to raise it). Not tried with other apps. |
-| `deploy` to EC2 | Works from the desktop app with a small static site (a deploy and an update). The address is plain `http://`: the EC2 destination has no HTTPS. Not tried with other apps. |
-| Desktop app | Builds and runs. Deploying and updating a small static site on Lightsail and on EC2, the apps list and the skyship tag were done on a real account. Removing an app from the list, the Trivy check, and publishing from a local image or an archive were only checked with a fake backend. |
+| `status` | Works against Lightsail and EC2. |
+| `deploy` to Lightsail | Works, including updating an app that already exists. Tested from the desktop app on a real account (new accounts can have a limit of zero container services; you may need to ask AWS to raise it). |
+| `deploy` to EC2 | Works, including updating an app. Tested from the desktop app on a real account. The address is plain `http://`: the EC2 destination has no HTTPS. |
+| Desktop app | Works on a real AWS account: deploying, updating and removing apps on Lightsail and EC2, the apps list and the skyship tag, the Trivy check, and publishing from a project folder, a local image or an archive. |
 
 ## Questions
 

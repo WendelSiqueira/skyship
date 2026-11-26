@@ -20,8 +20,9 @@ decides how to show it:
 - `Log { line }`: technical output (the `docker` output, details of what is being created)
 - `Done { url }`, `Failed { message }`, `Cancelled`
 
-Public API (`crates/core/src/lib.rs`): `Aws::connect`, `deploy`, `status`, `destroy`, plus
-`config`, `login`, `project`, `regions` and `progress`.
+Public API (`crates/core/src/lib.rs`): `Aws::connect`, `deploy`, `status`, `destroy`, `list_apps`,
+`destroy_app`, plus the modules `archive`, `config`, `docker`, `ec2`, `ecr`, `lightsail`, `local`,
+`login`, `progress`, `project`, `regions` and `scan`.
 
 ## Files
 
@@ -37,8 +38,12 @@ Public API (`crates/core/src/lib.rs`): `Aws::connect`, `deploy`, `status`, `dest
 | `crates/core/src/ecr.rs` | ECR repository + build/login/push (EC2 only) |
 | `crates/core/src/ec2.rs` | Role, security group, instance, deploy over SSM |
 | `crates/core/src/lightsail.rs` | Service, Lightsail registry, deployment |
+| `crates/core/src/archive.rs` | Opens a compressed project (`.zip`, `.tar`, `.tar.gz`/`.tgz`, `.rar` via `bsdtar`) with limits |
+| `crates/core/src/local.rs` | Lists the images and containers of the local Docker |
+| `crates/core/src/scan.rs` | Optional Trivy check, run as a Docker container |
 | `crates/cli/src/main.rs` | The `skyship` commands |
 | `crates/gui/src/main.rs` | Tauri commands that call the core and forward its events to the window |
+| `crates/gui/src/settings.rs` | The app's permissions (`<config>/settings.json`) |
 | `crates/gui/ui/` | The screens: `index.html`, `style.css`, `app.js`, `i18n.js` (no Node, no bundler) |
 
 Decisions: the **AWS SDK for Rust** is used (one binary, no AWS CLI needed), and **`docker` is
@@ -168,8 +173,6 @@ allows scripts only from the app itself).
   fails, the error shows in the menu and nothing changes.
 - At startup the app only uses the profile chosen last time, or one named `skyship` (the profile
   the app itself creates). Any other profile is used only when you choose it in the menu.
-- Once an account is ready, the app looks for apps in the last used region (and in `us-east-1`).
-  If it finds any, it opens the live apps screen directly; otherwise it opens the project screen.
 - The live screen lists the apps of the chosen region through `list_apps` (all Lightsail container
   services, plus the EC2 instances tagged `skyship:name`). A destination that fails, for example
   for lack of permission, becomes a warning and does not stop the other one.

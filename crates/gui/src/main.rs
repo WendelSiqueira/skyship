@@ -101,7 +101,7 @@ async fn list_local_docker(app: AppHandle) -> CmdResult<LocalDocker> {
     local::list().await.map_err(err)
 }
 
-/// O Trivy está instalado neste computador?
+/// O Docker responde? O Trivy roda como container, então é só isso que a verificação precisa.
 #[tauri::command]
 async fn trivy_available() -> bool {
     skyship_core::scan::available().await

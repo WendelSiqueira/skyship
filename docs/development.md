@@ -54,8 +54,8 @@ skyship status      # works for the EC2 target
 Limits: moto has **no Lightsail** (the Lightsail target fails with an HTML error), `docker push`
 needs a real registry (moto's ECR does not speak the Docker registry protocol), and SSM commands
 are accepted but never run. So the deploy flows cannot be validated this way, and a mock written
-by us cannot confirm the guesses listed under [Known gaps](#known-gaps) (the Lightsail registry
-path and the required permissions). Those need a real account.
+by us cannot confirm the permissions listed under [Known gaps](#known-gaps). Those need a real
+account.
 
 ## Continuous integration and releases
 
@@ -113,30 +113,17 @@ with `cargo metadata --format-version 1 | jq -r '.packages[] | "\(.name) \(.lice
 
 ## Known gaps
 
-- **Lightsail image path.** The push target is `{registry}/sr:<unique tag>`, the same as AWS's
-  `lightsailctl` (the registry login is only valid for that repository). The push,
-  `RegisterContainerImage` and the deployment with this path worked in one real deploy.
-- **Only one kind of app has been deployed**: a small static site, from the desktop app, on both
-  Lightsail and EC2 (a deploy and an update on each). Nothing else has been tried, and removing an
-  EC2 app from the apps list was not exercised on a real account.
-- Extra permissions AWS may require on Lightsail (for example IAM) are unverified beyond what that
-  one deploy needed.
+- Extra permissions AWS may require on Lightsail (for example IAM) are unverified beyond what the
+  deploys done so far needed.
 - The ECR lifecycle policy (keep the 3 most recent images) was written from the AWS documentation and has
   never run against a real account. ECR applies it asynchronously.
 - `destroy` for EC2 does not remove the IAM role or the security group.
-- The EC2 policy is limited to `skyship-*` roles, `skyship/*` repositories and tagged instances, but
-  it was only exercised by one deploy and one update on a real account.
+- The EC2 policy is limited to `skyship-*` roles, `skyship/*` repositories and tagged instances. Other
+  apps may need more than the deploys done so far.
 - An app published from an archive keeps its `skyship.toml` in the temporary extraction folder,
   which is removed at the next start; opening it again needs the file to be chosen again. Apps
   published from a local image keep their config in `<config>/apps/<name>`.
 - `.rar` needs the system `bsdtar`, and its size limit is checked after extraction.
-- The Trivy check was run for real through Docker on a public image and on an image holding a fake
-  AWS key (`cargo test -p skyship-core scans_real_image -- --ignored --nocapture`, image chosen
-  with `SKYSHIP_SCAN_IMAGE`), plus a fake backend for the screens. For a folder or archive the scan builds a temporary tag first (`scan::scan_project`); that path
-  was tested with a fake backend only.
-- Publishing a local image has not been run against a real account.
-- The desktop app was opened on a real window (first screen only). The other screens were checked
-  with a fake backend, and no deploy has been run through it.
 - No support for environment variables, custom domains / HTTPS, or several containers.
 - `skyship regions | head` prints a "Broken pipe" error (Rust's `println!` panics on a closed pipe).
 - The `lightsail` column of the region list is unverified.

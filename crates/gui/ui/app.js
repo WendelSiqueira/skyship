@@ -77,7 +77,7 @@ const state = {
   warnOpen: false, // detalhes completos do aviso da lista de apps abertos
   deleteUnmanaged: false, // pode apagar serviços sem a tag do skyship (desligado por padrão)
   scanImages: false, // verificar a imagem com o Trivy antes de publicar
-  trivy: null, // Trivy instalado? (null = ainda não checado)
+  trivy: null, // o Docker responde para rodar o Trivy? (null = ainda não checado)
   existing: null, // apps da conta na região do formulário: { region, apps }
   dockerList: null, // permissão de listar o Docker: true | false | null (nunca perguntado)
   source: 'folder', // origem do app: 'folder' | 'docker' | 'archive'
@@ -456,7 +456,6 @@ async function useAccount(profile, account) {
   await routeAfterAccount();
 }
 
-/** Com a conta pronta: se já há apps na região usada por último (ou na padrão), vai direto para eles. */
 /** Depois de conectar (ou ao abrir com uma conta salva) o app sempre começa em "Apps". */
 async function routeAfterAccount() {
   state.appsRegion = store.get('region') || DEFAULT_REGION;

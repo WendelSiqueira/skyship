@@ -50,8 +50,8 @@ falhar com `AccessDenied`, a mensagem diz qual ação falta.
 
 ## EC2
 
-**Derivada da leitura do código e testada uma vez:** um deploy e uma atualização de um site
-estático pequeno numa conta de verdade funcionaram com esta política. Outros apps podem precisar de
+**Derivada da leitura do código e testada numa conta real:** deploys e atualizações pelo app de
+desktop funcionaram com esta política. Outros apps podem precisar de
 mais. Ajuste conforme as mensagens de `AccessDenied` que aparecerem.
 
 ```json
