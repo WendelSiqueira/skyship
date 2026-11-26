@@ -8,10 +8,6 @@ skyship takes a folder with a `Dockerfile`, builds it on your computer, sends it
 gives you back a public address. It is made for people who are not used to cloud services: it
 explains each step and can remove everything when you are done, so the bill stops.
 
-> **Early stage.** One full deploy to Lightsail has been completed on a real account, through the
-> desktop app (a small static site). **It has not been repeated or tried with other kinds of app.**
-> Do not rely on it for anything important. See [what works today](#what-works-today).
-
 ## How it works
 
 1. **Connect your cloud account.** skyship tells you exactly which permissions to give it.
@@ -73,9 +69,9 @@ needs. Step by step instructions are in [docs/permissions.md](docs/permissions.m
 | `doctor` | Works. Used with a real account. |
 | `login` | Written and its file handling is tested, but it has not been used interactively on a real account yet. |
 | `status` | Works against Lightsail. |
-| `deploy` to Lightsail | Completed once, from the desktop app, with a small static site (new accounts can have a limit of zero container services; you may need to ask AWS to raise it). Not repeated or tried with other apps. |
+| `deploy` to Lightsail | Works from the desktop app with a small static site, including updating an app that already exists (new accounts can have a limit of zero container services; you may need to ask AWS to raise it). Not tried with other apps. |
 | `deploy` to EC2 | Written, **never run**. |
-| Desktop app | Builds and runs. One Lightsail deploy was completed through it, and its apps list was seen on a real account. Updating an app, removing one from the list, the Trivy check, and publishing from a local image or an archive were only checked with a fake backend. |
+| Desktop app | Builds and runs. Deploying and updating a small static site on Lightsail, the apps list and the skyship tag were done on a real account. Removing an app from the list, the Trivy check, and publishing from a local image or an archive were only checked with a fake backend. |
 
 ## Questions
 
