@@ -132,16 +132,22 @@ pub fn credentials_path() -> Result<PathBuf> {
     if let Ok(p) = std::env::var("AWS_SHARED_CREDENTIALS_FILE") {
         return Ok(p.into());
     }
-    let home = std::env::var("HOME").context("HOME não definido")?;
-    Ok(PathBuf::from(home).join(".aws").join("credentials"))
+    Ok(home_dir()?.join(".aws").join("credentials"))
 }
 
 fn config_path() -> Result<PathBuf> {
     if let Ok(p) = std::env::var("AWS_CONFIG_FILE") {
         return Ok(p.into());
     }
-    let home = std::env::var("HOME").context("HOME não definido")?;
-    Ok(PathBuf::from(home).join(".aws").join("config"))
+    Ok(home_dir()?.join(".aws").join("config"))
+}
+
+/// Pasta pessoal, na mesma ordem que o SDK da AWS procura: `HOME` e, no Windows, `USERPROFILE`.
+fn home_dir() -> Result<PathBuf> {
+    let from = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
+    from("HOME")
+        .or_else(|| if cfg!(windows) { from("USERPROFILE") } else { None })
+        .context("não achei a pasta pessoal (HOME / USERPROFILE não definidos)")
 }
 
 /// Nomes de perfis dentro do texto de `~/.aws/credentials` (`[nome]`) ou de `~/.aws/config`
@@ -258,21 +264,25 @@ pub fn upsert_profile(content: &str, profile: &str, key_id: &str, secret: &str) 
     out
 }
 
+/// No Unix o arquivo fica com permissão 600. No Windows não há modo: o arquivo herda a ACL da
+/// pasta pessoal, que por padrão só o próprio usuário (e administradores) acessa.
 fn write_private(path: &PathBuf, content: &str) -> Result<()> {
-    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
     let tmp = path.with_extension("skyship-tmp");
-    let mut f = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(&tmp)?;
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut opts, 0o600);
+    let mut f = opts.open(&tmp)?;
     f.write_all(content.as_bytes())?;
     drop(f);
-    std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
+    }
     std::fs::rename(&tmp, path)?;
     Ok(())
 }

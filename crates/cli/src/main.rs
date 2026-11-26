@@ -119,7 +119,8 @@ async fn main() -> Result<()> {
             let id = login::verify(&key_id, &secret, &region).await?;
             println!("✔ chaves válidas: conta {} ({})", id.account, id.arn);
             let path = login::save_profile(profile, &key_id, &secret)?;
-            println!("✔ perfil [{profile}] gravado em {} (permissão 600)", path.display());
+            let modo = if cfg!(unix) { " (permissão 600)" } else { "" };
+            println!("✔ perfil [{profile}] gravado em {}{modo}", path.display());
             println!("Use: skyship --profile {profile} deploy   (ou AWS_PROFILE={profile})");
         }
         Cmd::Regions => {
