@@ -116,13 +116,15 @@ with `cargo metadata --format-version 1 | jq -r '.packages[] | "\(.name) \(.lice
 - **Lightsail image path.** The push target is `{registry}/sr:<unique tag>`, the same as AWS's
   `lightsailctl` (the registry login is only valid for that repository). The push,
   `RegisterContainerImage` and the deployment with this path worked in one real deploy.
-- **Only one full deploy has been completed**: Lightsail, from the desktop app, with a small static
-  site. EC2 has never been run, and nothing else has been tried on Lightsail.
+- **Only one kind of app has been deployed**: a small static site, from the desktop app, on both
+  Lightsail and EC2 (a deploy and an update on each). Nothing else has been tried, and removing an
+  EC2 app from the apps list was not exercised on a real account.
 - Extra permissions AWS may require on Lightsail (for example IAM) are unverified beyond what that
   one deploy needed.
 - ECR has no lifecycle policy, so images pile up (EC2 only).
 - `destroy` for EC2 does not remove the IAM role or the security group.
-- The EC2 IAM policy is broader than it should be.
+- The EC2 policy is limited to `skyship-*` roles, `skyship/*` repositories and tagged instances, but
+  it was only exercised by one deploy and one update on a real account.
 - An app published from an archive keeps its `skyship.toml` in the temporary extraction folder,
   which is removed at the next start; opening it again needs the file to be chosen again. Apps
   published from a local image keep their config in `<config>/apps/<name>`.

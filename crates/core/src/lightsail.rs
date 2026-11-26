@@ -241,6 +241,7 @@ pub async fn list(sdk: &aws_config::SdkConfig, region: &str) -> Result<Vec<AppSu
             region: region.to_string(),
             size: s.power().map(|x| x.as_str().to_string()),
             managed: is_managed(s),
+            checks: None,
         })
         .collect())
 }

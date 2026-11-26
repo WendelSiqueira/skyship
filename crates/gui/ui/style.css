@@ -160,7 +160,7 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, .choice:focus-vis
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .task.current .ico { animation: none; } }
 
-.logbox { flex: 1; min-height: 140px; display: flex; flex-direction: column; border-radius: 10px; background: var(--log-bg); overflow: hidden; }
+.logbox { flex: none; height: clamp(200px, 38vh, 380px); display: flex; flex-direction: column; border-radius: 10px; background: var(--log-bg); overflow: hidden; }
 .logbar { display: flex; align-items: center; padding: 8px 14px; border-bottom: 1px solid #31353B; font-size: 12px; color: #B8BCC3; }
 .log { margin: 0; padding: 12px 14px; font-size: 12px; line-height: 1.6; color: #D6D9DE; overflow: auto; flex: 1; white-space: pre-wrap; overflow-wrap: anywhere; }
 
@@ -283,3 +283,4 @@ button.foot-text:focus-visible { outline: 2px solid var(--accent); outline-offse
 .log-timer { margin-left: 10px; color: #8F949C; font-variant-numeric: tabular-nums; }
 .log-timer:empty { display: none; }
 .danger-text { color: var(--danger-btn); }
+.state.bad { background: var(--danger-bg); color: var(--danger-title); border-color: transparent; }
