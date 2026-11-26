@@ -121,7 +121,8 @@ with `cargo metadata --format-version 1 | jq -r '.packages[] | "\(.name) \(.lice
   EC2 app from the apps list was not exercised on a real account.
 - Extra permissions AWS may require on Lightsail (for example IAM) are unverified beyond what that
   one deploy needed.
-- ECR has no lifecycle policy, so images pile up (EC2 only).
+- The ECR lifecycle policy (keep the 3 most recent images) was written from the AWS documentation and has
+  never run against a real account. ECR applies it asynchronously.
 - `destroy` for EC2 does not remove the IAM role or the security group.
 - The EC2 policy is limited to `skyship-*` roles, `skyship/*` repositories and tagged instances, but
   it was only exercised by one deploy and one update on a real account.

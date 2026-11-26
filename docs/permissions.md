@@ -66,7 +66,7 @@ a real account worked with this policy. Other apps may need more. Adjust it acco
       "Sid": "EcrSkyshipRepositories",
       "Effect": "Allow",
       "Action": [
-        "ecr:DescribeRepositories", "ecr:CreateRepository", "ecr:BatchCheckLayerAvailability",
+        "ecr:DescribeRepositories", "ecr:CreateRepository", "ecr:PutLifecyclePolicy", "ecr:BatchCheckLayerAvailability",
         "ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage"
       ],
       "Resource": "arn:aws:ecr:*:*:repository/skyship/*"
@@ -201,6 +201,7 @@ Your user needs these permissions to do that:
 |---|---|
 | `ecr:GetAuthorizationToken` | Log Docker in to ECR. |
 | `ecr:DescribeRepositories`, `ecr:CreateRepository` | Check whether the repository `skyship/<name>` exists and create it if not. |
+| `ecr:PutLifecyclePolicy` | Set the repository's lifecycle policy: keep only the 3 most recent images and let ECR delete the older ones. Optional: without it a deploy works, but old images pile up. |
 | `ecr:BatchCheckLayerAvailability`, `ecr:InitiateLayerUpload`, `ecr:UploadLayerPart`, `ecr:CompleteLayerUpload`, `ecr:PutImage` | The steps of `docker push`: which layers ECR already has, uploading each layer, and registering the image. |
 | `ec2:DescribeInstances` | Find the instance by its tag, wait for it to be `running`, read its public address, and fill the apps list. |
 | `ec2:DescribeInstanceStatus` | Read the status checks (`initializing`, `ok`) shown in the log and in the apps list. Optional. |
@@ -221,4 +222,6 @@ Your user needs these permissions to do that:
 
 Removing an EC2 app terminates the instance. The IAM role, the instance profile, the security group
 and the images in ECR stay in the account, so the next publish with the same name reuses the first
-three. Only the ECR images generate costs. Delete them by hand if you will not use the app again.
+three. Only the ECR images generate costs, and ECR itself keeps just the 3 most recent ones (the
+lifecycle policy removes the others, asynchronously: within about a day). Delete the repository by
+hand if you will not use the app again.

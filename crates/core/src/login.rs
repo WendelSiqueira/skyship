@@ -41,7 +41,7 @@ const POLICY_EC2: &str = r#"{
       "Sid": "EcrSkyshipRepositories",
       "Effect": "Allow",
       "Action": [
-        "ecr:DescribeRepositories", "ecr:CreateRepository", "ecr:BatchCheckLayerAvailability",
+        "ecr:DescribeRepositories", "ecr:CreateRepository", "ecr:PutLifecyclePolicy", "ecr:BatchCheckLayerAvailability",
         "ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage"
       ],
       "Resource": "arn:aws:ecr:*:*:repository/skyship/*"
@@ -372,6 +372,7 @@ mod tests {
         for a in [
             "ecr:GetAuthorizationToken",
             "ecr:DescribeRepositories",
+            "ecr:PutLifecyclePolicy",
             "ecr:CreateRepository",
             "ecr:PutImage",
             "ec2:DescribeInstances",
