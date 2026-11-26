@@ -277,7 +277,15 @@ fn valid_platform(p: &str) -> bool {
 /// Junta `rel` a `root`, resolve links e `..` e exige que o resultado continue dentro de `root`.
 pub(crate) fn confine(root: &Path, rel: &str, field: &str) -> Result<PathBuf> {
     let rel_path = Path::new(rel);
-    if rel.is_empty() || rel_path.is_absolute() {
+    // `has_root` e `Prefix` pegam o que `is_absolute` deixa passar no Windows: `/etc/passwd` e
+    // `\Windows` (raiz da unidade atual) e `C:arquivo` (relativo a outra unidade).
+    if rel.is_empty()
+        || rel_path.is_absolute()
+        || rel_path.has_root()
+        || rel_path
+            .components()
+            .any(|c| matches!(c, std::path::Component::Prefix(_)))
+    {
         bail!("{field} deve ser um caminho relativo à pasta do projeto: {rel:?}");
     }
     let full = root.join(rel_path);
@@ -434,6 +442,27 @@ mod tests {
             (".", "../outro/Dockerfile"),
             (".", "/etc/passwd"),
             ("sub/../..", "Dockerfile"),
+        ] {
+            let mut c = cfg();
+            c.context = ctx.into();
+            c.dockerfile = df.into();
+            assert!(
+                c.confine_paths(&d).is_err(),
+                "deveria rejeitar context={ctx:?} dockerfile={df:?}"
+            );
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_paths_escaping_project_are_rejected() {
+        let d = project();
+        for (ctx, df) in [
+            (".", r"\Windows\win.ini"),
+            (".", r"C:\nao-existe\Dockerfile"),
+            (".", r"C:nao-existe"),
+            (".", r"\\servidor\share\Dockerfile"),
+            (r"..\", "Dockerfile"),
         ] {
             let mut c = cfg();
             c.context = ctx.into();

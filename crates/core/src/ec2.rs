@@ -494,7 +494,7 @@ pub async fn destroy(sdk: &aws_config::SdkConfig, cfg: &Config, p: &Progress) ->
 #[cfg(test)]
 mod tests {
     use super::{http_responds, summarize_checks};
-    use tokio::io::AsyncWriteExt;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     #[test]
     fn checks_are_ok_only_when_both_pass() {
@@ -522,7 +522,19 @@ mod tests {
                 let port = l.local_addr().unwrap().port();
                 tokio::spawn(async move {
                     let (mut s, _) = l.accept().await.unwrap();
+                    // lê o pedido antes de responder, como um servidor de verdade: no Windows, fechar
+                    // o socket com dados não lidos manda RST e o cliente perde a resposta
+                    let mut req = Vec::new();
+                    let mut buf = [0u8; 512];
+                    while !req.ends_with(b"\r\n\r\n") {
+                        let n = s.read(&mut buf).await.unwrap();
+                        if n == 0 {
+                            break;
+                        }
+                        req.extend_from_slice(&buf[..n]);
+                    }
                     s.write_all(reply.as_bytes()).await.unwrap();
+                    s.shutdown().await.unwrap();
                 });
                 assert!(http_responds("127.0.0.1", port).await, "{reply}");
             }
