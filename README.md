@@ -27,8 +27,8 @@ It publishes to **AWS** (Amazon Web Services), in two ways:
 ## Quick start
 
 You need: [Docker](https://docs.docker.com/get-docker/) running, an AWS account, and the
-[Rust toolchain](https://rustup.rs/) to build it. There are no prebuilt releases, and it has only
-been tried on Linux.
+[Rust toolchain](https://rustup.rs/) to build it. There are no prebuilt releases. It was tried on Linux
+and on Windows 11 (see below).
 
 ```bash
 git clone <this repository>
@@ -98,7 +98,10 @@ support request). This is a limit of the account, not of skyship.
 (or Remove in the desktop app) removes the Lightsail service. For EC2 it ends the instance, but the permissions role and network
 rule it created stay behind (they are free).
 
-**Does it work on Windows or macOS?** It has not been tried there.
+**Does it work on Windows or macOS?** On Windows, yes: it was built and tested on Windows 11 with
+Docker Desktop (WSL 2 backend, Linux containers mode), and a site was published to Lightsail from the
+desktop app. Building needs Rust with the MSVC toolchain and the Visual Studio Build Tools (see
+[docs/development.md](docs/development.md#windows)). macOS has not been tried.
 
 ## Terms of use
 

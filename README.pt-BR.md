@@ -27,8 +27,8 @@ Ele publica na **AWS** (Amazon Web Services), de dois jeitos:
 ## Começando
 
 Você precisa de: [Docker](https://docs.docker.com/get-docker/) rodando, uma conta na AWS e o
-[Rust](https://rustup.rs/) para compilar. Não há versões prontas para baixar, e só foi testado no
-Linux.
+[Rust](https://rustup.rs/) para compilar. Não há versões prontas para baixar. Foi testado no
+Linux e no Windows 11 (veja abaixo).
 
 ```bash
 git clone <este repositório>
@@ -98,7 +98,10 @@ ou um chamado de suporte). É um limite da conta, não do skyship.
 (ou Remover no app de desktop) remove o serviço do Lightsail. Na EC2 ele encerra a instância, mas a função de permissões e a regra
 de rede que ele criou ficam para trás (elas não custam nada).
 
-**Funciona no Windows ou no macOS?** Ainda não foi testado.
+**Funciona no Windows ou no macOS?** No Windows, sim: foi compilado e testado no Windows 11 com o
+Docker Desktop (backend WSL 2, modo Linux containers), e um site foi publicado no Lightsail pelo app
+de desktop. Para compilar é preciso o Rust com a toolchain MSVC e o Visual Studio Build Tools (veja
+[docs/development.md](docs/development.md#windows)). O macOS ainda não foi testado.
 
 ## Termos de uso
 
