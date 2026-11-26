@@ -48,8 +48,8 @@ service. If a deploy fails with `AccessDenied`, the message names the missing ac
 
 ## EC2
 
-**Derived from reading the code and tested once:** a deploy and an update of a small static site on
-a real account worked with this policy. Other apps may need more. Adjust it according to the
+**Derived from reading the code and tested on a real account:** deploys and updates from the
+desktop app worked with this policy. Other apps may need more. Adjust it according to the
 `AccessDenied` messages you get.
 
 ```json

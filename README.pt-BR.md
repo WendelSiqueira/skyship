@@ -11,8 +11,9 @@ explica cada passo e remove tudo quando você terminar, para a cobrança parar.
 ## Como funciona
 
 1. **Conecte a sua conta de nuvem.** O skyship diz exatamente quais permissões dar a ele.
-2. **Escolha o seu app.** Uma pasta de projeto com um `Dockerfile`, um arquivo compactado
-   (`.zip`, `.tar.gz`) com um dentro ou, no app de desktop, uma imagem que já existe no seu Docker.
+2. **Escolha o seu app.** Uma pasta de projeto com um `Dockerfile` ou, no app de desktop, um arquivo
+   compactado (`.zip`, `.tar`, `.tar.gz`, ou `.rar` se o `bsdtar` estiver instalado) com um dentro, ou
+   uma imagem que já existe no seu Docker.
 3. **Publique.** O skyship monta a imagem, envia e coloca o app para rodar.
 4. **Abra o endereço** que ele devolve. Para atualizar o app, publique de novo com o mesmo nome.
    Quando não precisar mais, remova (`skyship destroy`, ou o botão Remover no app de desktop).
@@ -68,10 +69,10 @@ que o skyship precisa. O passo a passo está em [docs/permissions.pt-BR.md](docs
 | `init`, `policy`, `regions` | Funcionam. |
 | `doctor` | Funciona. Usado com uma conta real. |
 | `login` | Escrito e a parte que grava o arquivo está testada, mas ainda não foi usado de forma interativa numa conta real. |
-| `status` | Funciona no Lightsail. |
-| `deploy` no Lightsail | Funciona pelo app de desktop com um site estático pequeno, inclusive atualizar um app que já existe (contas novas podem ter limite zero de container services; talvez seja preciso pedir aumento à AWS). Não foi testado com outros apps. |
-| `deploy` na EC2 | Funciona pelo app de desktop com um site estático pequeno (um deploy e uma atualização). O endereço é `http://` puro: o destino EC2 não tem HTTPS. Não foi testado com outros apps. |
-| App de desktop | Compila e roda. Publicar e atualizar um site estático pequeno no Lightsail e na EC2, a lista de apps e a tag do skyship foram feitos numa conta de verdade. Remover pela lista, a verificação com o Trivy e publicar a partir de uma imagem local ou de um arquivo compactado só foram conferidos com um backend de mentira. |
+| `status` | Funciona no Lightsail e na EC2. |
+| `deploy` no Lightsail | Funciona, inclusive atualizar um app que já existe. Testado pelo app de desktop numa conta real (contas novas podem ter limite zero de container services; talvez seja preciso pedir aumento à AWS). |
+| `deploy` na EC2 | Funciona, inclusive atualizar um app. Testado pelo app de desktop numa conta real. O endereço é `http://` puro: o destino EC2 não tem HTTPS. |
+| App de desktop | Funciona numa conta real da AWS: publicar, atualizar e remover apps no Lightsail e na EC2, a lista de apps e a tag do skyship, a verificação com o Trivy e publicar a partir de uma pasta de projeto, de uma imagem local ou de um arquivo compactado. |
 
 ## Perguntas
 

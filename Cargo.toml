@@ -1,6 +1,7 @@
 [workspace]
 members = ["crates/core", "crates/cli", "crates/gui"]
-# crates/gui ainda está incompleto: fora do `cargo build` e `cargo test` padrão
+# crates/gui fica fora do `cargo build` e `cargo test` padrão porque o Tauri e o WebKit demoram para
+# compilar; use `cargo build -p skyship-gui` (veja docs/development.md)
 default-members = ["crates/core", "crates/cli"]
 resolver = "3"
 
