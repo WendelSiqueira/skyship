@@ -166,9 +166,7 @@ impl Config {
     /// para que um `skyship.toml` alheio não faça o build empacotar arquivos pessoais
     /// (ex.: `~/.aws`) dentro da imagem enviada.
     pub fn confine_paths(&mut self, dir: &Path) -> Result<()> {
-        let root = dir
-            .canonicalize()
-            .with_context(|| format!("pasta do projeto inacessível: {}", dir.display()))?;
+        let root = canonicalize(dir).with_context(|| format!("pasta do projeto inacessível: {}", dir.display()))?;
         // Só confere a contenção aqui. Se os arquivos existem, o tipo também é conferido; se não
         // existem, quem precisa deles (o deploy) reclama. `status` e `destroy` não precisam deles.
         let context = confine(&root, &self.context, "context")?;
@@ -274,6 +272,22 @@ fn valid_platform(p: &str) -> bool {
             .all(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()))
 }
 
+/// `Path::canonicalize` sem o prefixo `\\?\` que o Windows acrescenta (`\\?\C:\Users\...`). Esse
+/// prefixo aparece nas mensagens e vai para o `docker build`. Só é tirado de caminhos comuns de
+/// unidade (`C:\...`), sempre, para que a pasta do projeto e os caminhos dentro dela continuem
+/// comparáveis com `starts_with`; caminhos de rede (`\\?\UNC\...`) ficam como estão.
+pub(crate) fn canonicalize(p: &Path) -> std::io::Result<PathBuf> {
+    let c = p.canonicalize()?;
+    #[cfg(windows)]
+    if let Some(rest) = c.to_str().and_then(|s| s.strip_prefix(r"\\?\"))
+        && rest.as_bytes().get(1) == Some(&b':')
+        && rest.as_bytes()[0].is_ascii_alphabetic()
+    {
+        return Ok(PathBuf::from(rest));
+    }
+    Ok(c)
+}
+
 /// Junta `rel` a `root`, resolve links e `..` e exige que o resultado continue dentro de `root`.
 pub(crate) fn confine(root: &Path, rel: &str, field: &str) -> Result<PathBuf> {
     let rel_path = Path::new(rel);
@@ -289,7 +303,7 @@ pub(crate) fn confine(root: &Path, rel: &str, field: &str) -> Result<PathBuf> {
         bail!("{field} deve ser um caminho relativo à pasta do projeto: {rel:?}");
     }
     let full = root.join(rel_path);
-    let canon = match full.canonicalize() {
+    let canon = match canonicalize(&full) {
         Ok(c) => c,
         // ainda não existe: sem como resolver links, então só vale a regra léxica (sem `..`)
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -451,6 +465,19 @@ mod tests {
                 "deveria rejeitar context={ctx:?} dockerfile={df:?}"
             );
         }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_paths_have_no_verbatim_prefix() {
+        let d = project();
+        let root = canonicalize(&d).unwrap();
+        assert!(!root.to_string_lossy().starts_with(r"\\?\"), "{}", root.display());
+        let mut c = cfg();
+        c.confine_paths(&d).unwrap();
+        assert!(!c.context.starts_with(r"\\?\"), "{}", c.context);
+        assert!(!c.dockerfile.starts_with(r"\\?\"), "{}", c.dockerfile);
+        assert!(Path::new(&c.dockerfile).starts_with(&root));
     }
 
     #[cfg(windows)]

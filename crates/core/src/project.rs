@@ -20,9 +20,7 @@ pub struct ProjectInfo {
 }
 
 pub fn inspect(dir: &Path) -> Result<ProjectInfo> {
-    let root = dir
-        .canonicalize()
-        .with_context(|| format!("pasta inacessível: {}", dir.display()))?;
+    let root = config::canonicalize(dir).with_context(|| format!("pasta inacessível: {}", dir.display()))?;
     if !root.is_dir() {
         bail!("não é uma pasta: {}", root.display());
     }
