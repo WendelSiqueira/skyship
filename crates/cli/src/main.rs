@@ -1,15 +1,19 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
+use clap::{Parser, Subcommand};
 use skyship_core::{
+    Aws,
     config::{self, Config, Target},
     docker, login,
     progress::{Event, Progress, Stage},
-    Aws,
 };
-use clap::{Parser, Subcommand};
 use std::io::{BufRead, Write};
 
 #[derive(Parser)]
-#[command(name = "skyship", version, about = "Docker → AWS (EC2 / Lightsail) direto da sua máquina")]
+#[command(
+    name = "skyship",
+    version,
+    about = "Docker → AWS (EC2 / Lightsail) direto da sua máquina"
+)]
 struct Cli {
     /// Perfil AWS (de ~/.aws/credentials); também lê AWS_PROFILE
     #[arg(long, global = true, env = "AWS_PROFILE")]
@@ -86,7 +90,12 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     let profile = cli.profile;
     match cli.cmd {
-        Cmd::Init { name, region, port, target } => {
+        Cmd::Init {
+            name,
+            region,
+            port,
+            target,
+        } => {
             let name = match name {
                 Some(n) => n,
                 None => std::env::current_dir()?
@@ -116,12 +125,24 @@ async fn main() -> Result<()> {
         Cmd::Regions => {
             println!("{:<16} {:<18} Lightsail (não verificado)", "REGIÃO", "LOCAL");
             for r in skyship_core::regions::REGIONS {
-                println!("{:<16} {:<18} {}", r.code, r.name, if r.lightsail { "sim" } else { "-" });
+                println!(
+                    "{:<16} {:<18} {}",
+                    r.code,
+                    r.name,
+                    if r.lightsail { "sim" } else { "-" }
+                );
             }
         }
         Cmd::Policy { target } => println!("{}", login::policy(target)),
         Cmd::Doctor => {
-            println!("docker: {}", if docker::available().await { "ok" } else { "NÃO encontrado/rodando" });
+            println!(
+                "docker: {}",
+                if docker::available().await {
+                    "ok"
+                } else {
+                    "NÃO encontrado/rodando"
+                }
+            );
             let region = Config::load().map(|c| c.region).unwrap_or_else(|_| "us-east-1".into());
             let aws = Aws::connect(&region, profile.as_deref()).await;
             match aws.account().await {
@@ -148,7 +169,11 @@ async fn main() -> Result<()> {
         Cmd::Destroy { yes } => {
             let cfg = Config::load()?;
             if !yes {
-                bail!("isso apaga a infraestrutura de {} ({:?}); repita com --yes", cfg.name, cfg.target);
+                bail!(
+                    "isso apaga a infraestrutura de {} ({:?}); repita com --yes",
+                    cfg.name,
+                    cfg.target
+                );
             }
             let aws = Aws::connect(&cfg.region, profile.as_deref()).await;
             skyship_core::destroy(&aws, &cfg, &terminal_progress()).await?;

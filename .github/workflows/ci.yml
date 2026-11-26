@@ -17,6 +17,20 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  fmt:
+    name: Formatação
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: stable
+          components: rustfmt
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+
   core:
     name: Core e CLI (clippy, testes)
     runs-on: ubuntu-latest

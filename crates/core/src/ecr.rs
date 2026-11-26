@@ -1,4 +1,8 @@
-use crate::{config::Config, docker, progress::{Progress, Stage}};
+use crate::{
+    config::Config,
+    docker,
+    progress::{Progress, Stage},
+};
 use anyhow::{Context, Result};
 use aws_sdk_ecr::Client;
 use base64::Engine;
@@ -13,7 +17,13 @@ pub async fn build_and_push(sdk: &aws_config::SdkConfig, cfg: &Config, account: 
     let ecr = Client::new(sdk);
     let repo = format!("skyship/{}", cfg.name);
 
-    if ecr.describe_repositories().repository_names(&repo).send().await.is_err() {
+    if ecr
+        .describe_repositories()
+        .repository_names(&repo)
+        .send()
+        .await
+        .is_err()
+    {
         p.log(format!("criando repositório ECR {repo}"));
         ecr.create_repository().repository_name(&repo).send().await?;
     }

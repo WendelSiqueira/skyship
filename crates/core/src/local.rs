@@ -3,7 +3,7 @@
 //!
 //! Quem chama é responsável por ter a permissão da pessoa para isto (a GUI confere nas configurações).
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::Serialize;
 use serde_json::Value;
 use std::process::Stdio;
@@ -56,7 +56,11 @@ async fn docker_out(args: &[&str]) -> Result<String> {
         .map_err(|_| anyhow::anyhow!("o docker demorou demais para responder"))?
         .context("falha ao executar docker (ele está instalado e rodando?)")?;
     if !out.status.success() {
-        bail!("docker {}: {}", args.join(" "), String::from_utf8_lossy(&out.stderr).trim());
+        bail!(
+            "docker {}: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
@@ -112,7 +116,8 @@ fn ports_of(config: &Value) -> Vec<u16> {
 /// Interpreta a saída de `docker image inspect` e `docker container inspect` (arrays JSON).
 pub fn parse(images_json: &str, containers_json: &str) -> Result<LocalDocker> {
     let imgs: Vec<Value> = serde_json::from_str(images_json).context("resposta do docker em formato inesperado")?;
-    let conts: Vec<Value> = serde_json::from_str(containers_json).context("resposta do docker em formato inesperado")?;
+    let conts: Vec<Value> =
+        serde_json::from_str(containers_json).context("resposta do docker em formato inesperado")?;
 
     let mut containers = vec![];
     for c in &conts {
@@ -135,13 +140,23 @@ pub fn parse(images_json: &str, containers_json: &str) -> Result<LocalDocker> {
     for i in &imgs {
         let tags: Vec<String> = i["RepoTags"]
             .as_array()
-            .map(|a| a.iter().filter_map(Value::as_str).filter(|t| !t.contains("<none>")).map(String::from).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(Value::as_str)
+                    .filter(|t| !t.contains("<none>"))
+                    .map(String::from)
+                    .collect()
+            })
             .unwrap_or_default();
         if tags.is_empty() {
             continue; // sem tag (camada solta): não dá para publicar por nome
         }
         let id = short_id(i["Id"].as_str().unwrap_or(""));
-        let running = containers.iter().filter(|c| c.image_id == id).map(|c| c.name.clone()).collect();
+        let running = containers
+            .iter()
+            .filter(|c| c.image_id == id)
+            .map(|c| c.name.clone())
+            .collect();
         images.push(LocalImage {
             reference: tags[0].clone(),
             tags,
@@ -156,8 +171,11 @@ pub fn parse(images_json: &str, containers_json: &str) -> Result<LocalDocker> {
     }
     // em execução primeiro, depois as que expõem porta (parecem aplicações), depois por nome
     images.sort_by(|a, b| {
-        (!b.running.is_empty(), !b.exposed_ports.is_empty(), &a.reference)
-            .cmp(&(!a.running.is_empty(), !a.exposed_ports.is_empty(), &b.reference))
+        (!b.running.is_empty(), !b.exposed_ports.is_empty(), &a.reference).cmp(&(
+            !a.running.is_empty(),
+            !a.exposed_ports.is_empty(),
+            &b.reference,
+        ))
     });
     Ok(LocalDocker { images, containers })
 }
@@ -214,7 +232,10 @@ mod tests {
     #[test]
     #[ignore]
     fn lists_real_docker() {
-        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
         let d = rt.block_on(list()).unwrap();
         println!(
             "imagens com tag: {} | com porta: {} | em execução: {} | containers: {} | com pasta do compose: {} | arquiteturas: {:?}",
@@ -223,7 +244,10 @@ mod tests {
             d.images.iter().filter(|i| !i.running.is_empty()).count(),
             d.containers.len(),
             d.containers.iter().filter(|c| c.project_dir.is_some()).count(),
-            d.images.iter().map(|i| i.arch.as_str()).collect::<std::collections::BTreeSet<_>>(),
+            d.images
+                .iter()
+                .map(|i| i.arch.as_str())
+                .collect::<std::collections::BTreeSet<_>>(),
         );
     }
 

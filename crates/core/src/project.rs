@@ -1,7 +1,7 @@
 //! Inspeção de uma pasta de projeto (para a interface sugerir nome, porta etc.).
 
 use crate::config::{self, Config};
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::Serialize;
 use std::path::Path;
 
@@ -28,7 +28,9 @@ pub fn inspect(dir: &Path) -> Result<ProjectInfo> {
     }
 
     // O Dockerfile só vale se ficar dentro da pasta (um link para fora não é lido).
-    let dockerfile = config::confine(&root, "Dockerfile", "dockerfile").ok().filter(|p| p.is_file());
+    let dockerfile = config::confine(&root, "Dockerfile", "dockerfile")
+        .ok()
+        .filter(|p| p.is_file());
     let port = dockerfile
         .as_ref()
         .and_then(|p| std::fs::read_to_string(p).ok())
@@ -99,7 +101,12 @@ mod tests {
         assert_eq!(suggest_name("___"), "app");
         assert_eq!(suggest_name(""), "app");
         assert!(suggest_name(&"a".repeat(80)).len() <= 40);
-        let c = Config::new(suggest_name("Meu App_Legal!"), "us-east-1".into(), 80, config::Target::Ec2);
+        let c = Config::new(
+            suggest_name("Meu App_Legal!"),
+            "us-east-1".into(),
+            80,
+            config::Target::Ec2,
+        );
         c.validate().unwrap();
     }
 }

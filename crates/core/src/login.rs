@@ -2,7 +2,7 @@
 //! Sem prompts: quem pergunta ao usuário é o CLI ou a GUI.
 
 use crate::config::Target;
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use aws_credential_types::Credentials;
 use std::io::Write;
 use std::path::PathBuf;

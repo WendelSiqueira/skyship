@@ -1,10 +1,10 @@
 use crate::{
+    AppSummary, StatusEntry,
     config::{Config, Target},
     ecr::Image,
     progress::{Progress, Stage},
-    AppSummary, StatusEntry,
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use aws_sdk_ec2::types::{
     Filter, IamInstanceProfileSpecification, InstanceStateName, ResourceType, Tag, TagSpecification,
 };
@@ -18,7 +18,10 @@ fn res_name(cfg: &Config) -> String {
     format!("skyship-{}", cfg.name)
 }
 
-async fn find_instances(ec2: &aws_sdk_ec2::Client, cfg: &Config) -> Result<Vec<(String, InstanceStateName, Option<String>)>> {
+async fn find_instances(
+    ec2: &aws_sdk_ec2::Client,
+    cfg: &Config,
+) -> Result<Vec<(String, InstanceStateName, Option<String>)>> {
     let out = ec2
         .describe_instances()
         .filters(Filter::builder().name("tag:skyship:name").values(&cfg.name).build())
@@ -48,16 +51,33 @@ async fn ensure_role(sdk: &aws_config::SdkConfig, cfg: &Config, p: &Progress) ->
     let name = res_name(cfg);
     if iam.get_role().role_name(&name).send().await.is_err() {
         p.log(format!("criando role IAM {name}"));
-        iam.create_role().role_name(&name).assume_role_policy_document(TRUST).send().await?;
+        iam.create_role()
+            .role_name(&name)
+            .assume_role_policy_document(TRUST)
+            .send()
+            .await?;
         for policy in [
             "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
             "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
         ] {
-            iam.attach_role_policy().role_name(&name).policy_arn(policy).send().await?;
+            iam.attach_role_policy()
+                .role_name(&name)
+                .policy_arn(policy)
+                .send()
+                .await?;
         }
     }
-    if iam.get_instance_profile().instance_profile_name(&name).send().await.is_err() {
-        iam.create_instance_profile().instance_profile_name(&name).send().await?;
+    if iam
+        .get_instance_profile()
+        .instance_profile_name(&name)
+        .send()
+        .await
+        .is_err()
+    {
+        iam.create_instance_profile()
+            .instance_profile_name(&name)
+            .send()
+            .await?;
         iam.add_role_to_instance_profile()
             .instance_profile_name(&name)
             .role_name(&name)
@@ -143,7 +163,12 @@ async fn ensure_instance(sdk: &aws_config::SdkConfig, cfg: &Config, p: &Progress
         )
         .send()
         .await?;
-    Ok(out.instances().first().and_then(|i| i.instance_id()).context("sem instance id")?.to_string())
+    Ok(out
+        .instances()
+        .first()
+        .and_then(|i| i.instance_id())
+        .context("sem instance id")?
+        .to_string())
 }
 
 async fn wait_running(ec2: &aws_sdk_ec2::Client, id: &str) -> Result<String> {
@@ -201,7 +226,10 @@ pub async fn deploy(sdk: &aws_config::SdkConfig, cfg: &Config, image: &Image, p:
         ),
         format!("docker pull {}", image.uri),
         "docker rm -f app || true".to_string(),
-        format!("docker run -d --name app --restart unless-stopped -p 80:{} {}", cfg.port, image.uri),
+        format!(
+            "docker run -d --name app --restart unless-stopped -p 80:{} {}",
+            cfg.port, image.uri
+        ),
         "docker image prune -af --filter until=24h || true".to_string(),
     ];
 
@@ -221,7 +249,13 @@ pub async fn deploy(sdk: &aws_config::SdkConfig, cfg: &Config, image: &Image, p:
 
     for _ in 0..120 {
         sleep(Duration::from_secs(3)).await;
-        let Ok(inv) = ssm.get_command_invocation().command_id(&cmd_id).instance_id(&id).send().await else {
+        let Ok(inv) = ssm
+            .get_command_invocation()
+            .command_id(&cmd_id)
+            .instance_id(&id)
+            .send()
+            .await
+        else {
             continue; // a invocação pode demorar a existir
         };
         match inv.status().map(|s| s.as_str()) {
@@ -249,7 +283,11 @@ pub async fn status(sdk: &aws_config::SdkConfig, cfg: &Config) -> Result<Vec<Sta
     Ok(find_instances(&ec2, cfg)
         .await?
         .into_iter()
-        .map(|(id, state, ip)| StatusEntry { id, state: state.as_str().to_string(), url: ip.map(|i| format!("http://{i}")) })
+        .map(|(id, state, ip)| StatusEntry {
+            id,
+            state: state.as_str().to_string(),
+            url: ip.map(|i| format!("http://{i}")),
+        })
         .collect())
 }
 
@@ -283,7 +321,12 @@ pub async fn list(sdk: &aws_config::SdkConfig, region: &str) -> Result<Vec<AppSu
             apps.push(AppSummary {
                 name,
                 target: Target::Ec2,
-                state: i.state().and_then(|s| s.name()).map(|n| n.as_str()).unwrap_or("?").to_string(),
+                state: i
+                    .state()
+                    .and_then(|s| s.name())
+                    .map(|n| n.as_str())
+                    .unwrap_or("?")
+                    .to_string(),
                 url: i.public_ip_address().map(|ip| format!("http://{ip}")),
                 region: region.to_string(),
                 size: i.instance_type().map(|t| t.as_str().to_string()),
@@ -303,6 +346,9 @@ pub async fn destroy(sdk: &aws_config::SdkConfig, cfg: &Config, p: &Progress) ->
     }
     p.log(format!("terminando {}", ids.join(", ")));
     ec2.terminate_instances().set_instance_ids(Some(ids)).send().await?;
-    p.log(format!("role IAM e security group `{}` foram mantidos; remova à mão se quiser", res_name(cfg)));
+    p.log(format!(
+        "role IAM e security group `{}` foram mantidos; remova à mão se quiser",
+        res_name(cfg)
+    ));
     Ok(())
 }

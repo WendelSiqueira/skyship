@@ -6,18 +6,19 @@
 
 mod settings;
 
-use skyship_core::{
-    archive::{self, Limits},
-    config::{Config, Target},
-    docker, local, login,
-    local::LocalDocker,
-    progress::{Event, Progress},
-    project::{self, ProjectInfo},
-    regions::{RegionInfo, REGIONS},
-    Aws, ListResult, StatusEntry,
-};
 use serde::{Deserialize, Serialize};
 use settings::Settings;
+use skyship_core::{
+    Aws, ListResult, StatusEntry,
+    archive::{self, Limits},
+    config::{Config, Target},
+    docker, local,
+    local::LocalDocker,
+    login,
+    progress::{Event, Progress},
+    project::{self, ProjectInfo},
+    regions::{REGIONS, RegionInfo},
+};
 use std::{
     path::{Path, PathBuf},
     sync::Mutex,
@@ -54,7 +55,9 @@ struct ConfigInput {
 }
 
 fn config_dir(app: &AppHandle) -> PathBuf {
-    app.path().app_config_dir().unwrap_or_else(|_| std::env::temp_dir().join("skyship"))
+    app.path()
+        .app_config_dir()
+        .unwrap_or_else(|_| std::env::temp_dir().join("skyship"))
 }
 
 #[tauri::command]
@@ -64,7 +67,13 @@ fn get_settings(app: AppHandle) -> Settings {
 
 /// Liga ou desliga permissões. Campos ausentes não mudam.
 #[tauri::command]
-fn update_settings(app: AppHandle, read_profiles: Option<bool>, docker_list: Option<bool>, scan_images: Option<bool>, delete_unmanaged: Option<bool>) -> CmdResult<Settings> {
+fn update_settings(
+    app: AppHandle,
+    read_profiles: Option<bool>,
+    docker_list: Option<bool>,
+    scan_images: Option<bool>,
+    delete_unmanaged: Option<bool>,
+) -> CmdResult<Settings> {
     let dir = config_dir(&app);
     let mut s = settings::load(&dir);
     if let Some(v) = read_profiles {
@@ -163,12 +172,19 @@ async fn docker_ok() -> bool {
 /// Valida as chaves na AWS e só então grava o perfil em `~/.aws/credentials`.
 #[tauri::command]
 async fn save_credentials(profile: String, key_id: String, secret: String, region: String) -> CmdResult<Account> {
-    if profile.is_empty() || !profile.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+    if profile.is_empty()
+        || !profile
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
         return Err("nome de perfil inválido (use letras, números, - e _)".into());
     }
     let id = login::verify(&key_id, &secret, &region).await.map_err(err)?;
     login::save_profile(&profile, &key_id, &secret).map_err(err)?;
-    Ok(Account { account: id.account, arn: id.arn })
+    Ok(Account {
+        account: id.account,
+        arn: id.arn,
+    })
 }
 
 /// Confere se um perfil existente tem credenciais válidas; devolve o número da conta.
@@ -177,7 +193,11 @@ async fn check_profile(profile: Option<String>, region: String) -> CmdResult<Str
     if !skyship_core::regions::is_known(&region) {
         return Err("região desconhecida".into());
     }
-    Aws::connect(&region, profile.as_deref()).await.account().await.map_err(err)
+    Aws::connect(&region, profile.as_deref())
+        .await
+        .account()
+        .await
+        .map_err(err)
 }
 
 #[tauri::command]
@@ -233,7 +253,9 @@ async fn start_deploy(
             let _ = emitter.emit("deploy-event", &e);
         });
         if let Err(e) = skyship_core::deploy(&aws, &cfg, &progress).await {
-            progress.emit(Event::Failed { message: format!("{e:#}") });
+            progress.emit(Event::Failed {
+                message: format!("{e:#}"),
+            });
         }
         // Libera o slot; start_deploy segura o lock até guardar o handle, então não há corrida.
         *app.state::<DeployState>().0.lock().unwrap() = None;
@@ -273,16 +295,26 @@ async fn list_apps(profile: Option<String>, region: String) -> CmdResult<ListRes
 async fn destroy(dir: String, profile: Option<String>) -> CmdResult<()> {
     let cfg = Config::load_from(Path::new(&dir)).map_err(err)?;
     let aws = Aws::connect(&cfg.region, profile.as_deref()).await;
-    skyship_core::destroy(&aws, &cfg, &Progress::silent()).await.map_err(err)
+    skyship_core::destroy(&aws, &cfg, &Progress::silent())
+        .await
+        .map_err(err)
 }
 
 /// Remove um app da lista da conta (sem pasta de projeto). A confirmação é feita na interface.
 #[tauri::command]
-async fn destroy_app(app: AppHandle, profile: Option<String>, region: String, target: String, name: String) -> CmdResult<()> {
+async fn destroy_app(
+    app: AppHandle,
+    profile: Option<String>,
+    region: String,
+    target: String,
+    name: String,
+) -> CmdResult<()> {
     let allow_unmanaged = settings::load(&config_dir(&app)).delete_unmanaged;
     let target: skyship_core::config::Target = target.parse()?;
     let aws = Aws::connect(&region, profile.as_deref()).await;
-    skyship_core::destroy_app(&aws, &name, &region, target, allow_unmanaged, &Progress::silent()).await.map_err(err)
+    skyship_core::destroy_app(&aws, &name, &region, target, allow_unmanaged, &Progress::silent())
+        .await
+        .map_err(err)
 }
 
 fn main() {

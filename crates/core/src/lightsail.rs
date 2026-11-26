@@ -1,13 +1,12 @@
 use crate::{
+    AppSummary, StatusEntry,
     config::{Config, Target},
     docker,
     progress::{Progress, Stage},
-    AppSummary, StatusEntry,
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use aws_sdk_lightsail::types::{
-    Container, ContainerServiceHealthCheckConfig, ContainerServicePowerName, ContainerServiceProtocol,
-    EndpointRequest,
+    Container, ContainerServiceHealthCheckConfig, ContainerServicePowerName, ContainerServiceProtocol, EndpointRequest,
 };
 use std::time::Duration;
 use tokio::time::sleep;
@@ -34,7 +33,10 @@ async fn get(ls: &aws_sdk_lightsail::Client, name: &str) -> Result<Option<aws_sd
         Ok(o) => Ok(o.container_services().first().cloned()),
         // só "não existe" vira None; credencial inválida, rede etc. precisam aparecer como erro
         Err(e) if e.as_service_error().is_some_and(|s| s.is_not_found_exception()) => Ok(None),
-        Err(e) => Err(anyhow::anyhow!("falha ao consultar o Lightsail: {}", aws_sdk_lightsail::error::DisplayErrorContext(&e))),
+        Err(e) => Err(anyhow::anyhow!(
+            "falha ao consultar o Lightsail: {}",
+            aws_sdk_lightsail::error::DisplayErrorContext(&e)
+        )),
     }
 }
 
@@ -44,7 +46,9 @@ pub async fn deploy(sdk: &aws_config::SdkConfig, cfg: &Config, p: &Progress) -> 
     let name = svc_name(cfg);
 
     // 1. build local, ou a imagem que já existe (não depende do serviço)
-    let tag = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs();
+    let tag = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_secs();
     let local = match &cfg.image {
         Some(img) => img.clone(),
         None => format!("skyship-build/{name}:{tag}"),
@@ -60,7 +64,10 @@ pub async fn deploy(sdk: &aws_config::SdkConfig, cfg: &Config, p: &Progress) -> 
     p.start(Stage::Service);
     let mut svc = get(&ls, &name).await?;
     if svc.is_none() {
-        p.log(format!("criando container service {name} ({} x{})", cfg.lightsail.power, cfg.lightsail.scale));
+        p.log(format!(
+            "criando container service {name} ({} x{})",
+            cfg.lightsail.power, cfg.lightsail.scale
+        ));
         ls.create_container_service()
             .service_name(&name)
             .power(ContainerServicePowerName::from(cfg.lightsail.power.as_str()))
@@ -87,19 +94,28 @@ pub async fn deploy(sdk: &aws_config::SdkConfig, cfg: &Config, p: &Progress) -> 
         let elapsed = started.elapsed();
         if elapsed - last_log >= Duration::from_secs(30) {
             last_log = elapsed;
-            p.log(format!("ainda esperando: o service está em {} há {} s", if state.is_empty() { "?" } else { &state }, elapsed.as_secs()));
+            p.log(format!(
+                "ainda esperando: o service está em {} há {} s",
+                if state.is_empty() { "?" } else { &state },
+                elapsed.as_secs()
+            ));
         }
         sleep(Duration::from_secs(5)).await;
         svc = get(&ls, &name).await?.context("service sumiu")?;
     }
     if !ready {
-        bail!("o service {name} não ficou pronto em 20 minutos (ainda em {}); ele continua sendo criado na AWS, tente de novo mais tarde",
-            svc.state().map(|x| x.as_str()).unwrap_or("?"));
+        bail!(
+            "o service {name} não ficou pronto em 20 minutos (ainda em {}); ele continua sendo criado na AWS, tente de novo mais tarde",
+            svc.state().map(|x| x.as_str()).unwrap_or("?")
+        );
     }
     // Marca o serviço como do skyship (também os criados antes disso). É um extra: sem a permissão
     // `lightsail:TagResource` o deploy segue, só que o app não aparece como do skyship na lista.
     if !is_managed(&svc) {
-        let tag = aws_sdk_lightsail::types::Tag::builder().key(TAG_KEY).value(&name).build();
+        let tag = aws_sdk_lightsail::types::Tag::builder()
+            .key(TAG_KEY)
+            .value(&name)
+            .build();
         if let Err(e) = ls.tag_resource().resource_name(&name).tags(tag).send().await {
             p.log(format!(
                 "não consegui marcar o service como do skyship ({}); dê a permissão lightsail:TagResource para isso",
@@ -119,11 +135,19 @@ pub async fn deploy(sdk: &aws_config::SdkConfig, cfg: &Config, p: &Progress) -> 
         .cloned()
         .context("Lightsail não devolveu login de registry")?;
     let registry = login.registry().context("login sem registry")?.to_string();
-    docker::login(&registry, login.username().unwrap_or_default(), login.password().unwrap_or_default(), p).await?;
+    docker::login(
+        &registry,
+        login.username().unwrap_or_default(),
+        login.password().unwrap_or_default(),
+        p,
+    )
+    .await?;
 
     // O repositório do Lightsail é sempre `<registry>/sr`: o serviço e o label não entram no caminho
     // (o `lightsailctl` da AWS faz igual; o login só vale para esse repositório). O tag precisa ser único.
-    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos();
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_nanos();
     let remote = format!("{registry}/sr:{nanos}");
     docker::tag(&local, &remote, p).await?;
     docker::push(&remote, p).await?;
@@ -170,7 +194,10 @@ pub async fn deploy(sdk: &aws_config::SdkConfig, cfg: &Config, p: &Progress) -> 
     for _ in 0..120 {
         sleep(Duration::from_secs(10)).await;
         let s = get(&ls, &name).await?.context("service sumiu")?;
-        let dep = s.current_deployment().and_then(|d| d.state()).map(|x| x.as_str().to_string());
+        let dep = s
+            .current_deployment()
+            .and_then(|d| d.state())
+            .map(|x| x.as_str().to_string());
         match dep.as_deref() {
             Some("ACTIVE") => {
                 p.done(Stage::WaitLive);

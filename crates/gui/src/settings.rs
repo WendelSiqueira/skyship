@@ -31,7 +31,12 @@ fn yes() -> bool {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { read_profiles: true, docker_list: None, scan_images: false, delete_unmanaged: false }
+        Self {
+            read_profiles: true,
+            docker_list: None,
+            scan_images: false,
+            delete_unmanaged: false,
+        }
     }
 }
 
@@ -58,7 +63,14 @@ mod tests {
     use super::*;
 
     fn tmp() -> std::path::PathBuf {
-        let d = std::env::temp_dir().join(format!("skyship-settings-test-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let d = std::env::temp_dir().join(format!(
+            "skyship-settings-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         std::fs::create_dir_all(&d).unwrap();
         d
     }
@@ -75,7 +87,12 @@ mod tests {
     #[test]
     fn round_trip() {
         let d = tmp();
-        let s = Settings { read_profiles: false, docker_list: Some(true), scan_images: true, delete_unmanaged: true };
+        let s = Settings {
+            read_profiles: false,
+            docker_list: Some(true),
+            scan_images: true,
+            delete_unmanaged: true,
+        };
         save(&d, &s).unwrap();
         assert_eq!(load(&d), s);
     }
@@ -93,7 +110,13 @@ mod tests {
 
     #[test]
     fn serializes_in_camel_case_for_the_frontend() {
-        let j = serde_json::to_string(&Settings { read_profiles: true, docker_list: Some(false), scan_images: false, delete_unmanaged: false }).unwrap();
+        let j = serde_json::to_string(&Settings {
+            read_profiles: true,
+            docker_list: Some(false),
+            scan_images: false,
+            delete_unmanaged: false,
+        })
+        .unwrap();
         assert!(j.contains("readProfiles") && j.contains("dockerList"));
     }
 }

@@ -62,6 +62,7 @@ path and the required permissions). Those need a real account.
 Everything is in `.github/`; actions are pinned by commit hash (Dependabot proposes the updates).
 
 - **`ci.yml`**, on every pull request and on `main`:
+  - `fmt`: `cargo fmt --all -- --check` (`rustfmt.toml` sets 120 columns)
   - `core`: `cargo clippy --locked --all-targets -- -D warnings`, `cargo test --locked`, `cargo build --locked`
   - `gui`: the same for `skyship-gui` (installs the WebKitGTK 4.1 development packages)
   - `ui`: `node scripts/check-ui.mjs` (syntax of the frontend, the three languages have the same
@@ -84,13 +85,10 @@ that commit on `main` (`git tag vX.Y.Z && git push origin vX.Y.Z`), then review 
 Run the same checks locally before opening a pull request:
 
 ```bash
-cargo clippy --all-targets -- -D warnings && cargo test
+cargo fmt --all && cargo clippy --all-targets -- -D warnings && cargo test
 cargo clippy --all-targets -p skyship-gui -- -D warnings && cargo test -p skyship-gui
 node scripts/check-ui.mjs
 ```
-
-`rustfmt` is not enforced: the code was not written with it, so turning it on is a separate,
-purely mechanical change.
 
 ## Licenses
 

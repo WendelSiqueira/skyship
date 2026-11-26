@@ -5,10 +5,10 @@
 //! (HIGH e CRITICAL). É um aviso, nunca um bloqueio, e "nada encontrado" não quer dizer que a
 //! imagem é segura. O conteúdo dos segredos NÃO é lido nem devolvido: só a regra e o arquivo.
 
-use crate::config::{valid_image_ref, Config};
+use crate::config::{Config, valid_image_ref};
 use crate::docker;
 use crate::progress::Progress;
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::Serialize;
 use serde_json::Value;
 use std::process::Stdio;
@@ -81,12 +81,28 @@ pub async fn scan_image(image: &str) -> Result<ScanReport> {
     let name = format!("skyship-trivy-{}", std::process::id());
     let fut = tokio::process::Command::new("docker")
         .args([
-            "run", "--rm", "--name", &name,
-            "-v", "/var/run/docker.sock:/var/run/docker.sock",
-            "-v", &format!("{CACHE_VOLUME}:/root/.cache/"),
+            "run",
+            "--rm",
+            "--name",
+            &name,
+            "-v",
+            "/var/run/docker.sock:/var/run/docker.sock",
+            "-v",
+            &format!("{CACHE_VOLUME}:/root/.cache/"),
             TRIVY_IMAGE,
-            "image", "--quiet", "--format", "json", "--scanners", "vuln,secret",
-            "--severity", "HIGH,CRITICAL", "--image-src", "docker", "--timeout", "12m", image,
+            "image",
+            "--quiet",
+            "--format",
+            "json",
+            "--scanners",
+            "vuln,secret",
+            "--severity",
+            "HIGH,CRITICAL",
+            "--image-src",
+            "docker",
+            "--timeout",
+            "12m",
+            image,
         ])
         .stdin(Stdio::null())
         .kill_on_drop(true)
@@ -101,7 +117,14 @@ pub async fn scan_image(image: &str) -> Result<ScanReport> {
     if !out.status.success() {
         stop(&name).await;
         let err = String::from_utf8_lossy(&out.stderr);
-        bail!("trivy: {}", err.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("falhou").trim());
+        bail!(
+            "trivy: {}",
+            err.lines()
+                .rev()
+                .find(|l| !l.trim().is_empty())
+                .unwrap_or("falhou")
+                .trim()
+        );
     }
     parse(&String::from_utf8_lossy(&out.stdout))
 }
@@ -154,10 +177,18 @@ pub fn parse(json: &str) -> Result<ScanReport> {
                     t if t.is_empty() => s(sec, "RuleID"),
                     t => t,
                 };
-                r.secrets.push(SecretFinding { title, file: target.clone() });
+                r.secrets.push(SecretFinding {
+                    title,
+                    file: target.clone(),
+                });
             }
         }
-        for vu in res.get("Vulnerabilities").and_then(Value::as_array).into_iter().flatten() {
+        for vu in res
+            .get("Vulnerabilities")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
             let sev = s(vu, "Severity");
             match sev.as_str() {
                 "CRITICAL" => r.critical += 1,
@@ -168,7 +199,13 @@ pub fn parse(json: &str) -> Result<ScanReport> {
             if fixed.is_some() {
                 r.fixable += 1;
             }
-            r.vulns.push(VulnFinding { id: s(vu, "VulnerabilityID"), package: s(vu, "PkgName"), installed: s(vu, "InstalledVersion"), fixed, severity: sev });
+            r.vulns.push(VulnFinding {
+                id: s(vu, "VulnerabilityID"),
+                package: s(vu, "PkgName"),
+                installed: s(vu, "InstalledVersion"),
+                fixed,
+                severity: sev,
+            });
         }
     }
     // críticas primeiro, depois as que já têm correção
@@ -193,7 +230,13 @@ mod tests {
         let r = parse(SAMPLE).unwrap();
         assert_eq!((r.critical, r.high, r.fixable, r.secrets_total), (1, 1, 1, 1));
         assert_eq!(r.vulns[0].id, "CVE-2"); // crítica primeiro
-        assert_eq!(r.secrets[0], SecretFinding { title: "AWS Access Key ID".into(), file: "app/.env".into() });
+        assert_eq!(
+            r.secrets[0],
+            SecretFinding {
+                title: "AWS Access Key ID".into(),
+                file: "app/.env".into()
+            }
+        );
         assert!(!r.is_clean());
     }
 
@@ -211,8 +254,16 @@ mod tests {
 
     #[test]
     fn caps_the_listed_items() {
-        let many: Vec<String> = (0..20).map(|i| format!(r#"{{"VulnerabilityID":"CVE-{i}","PkgName":"p","InstalledVersion":"1","Severity":"HIGH"}}"#)).collect();
-        let r = parse(&format!(r#"{{"Results":[{{"Target":"t","Vulnerabilities":[{}]}}]}}"#, many.join(","))).unwrap();
+        let many: Vec<String> = (0..20)
+            .map(|i| {
+                format!(r#"{{"VulnerabilityID":"CVE-{i}","PkgName":"p","InstalledVersion":"1","Severity":"HIGH"}}"#)
+            })
+            .collect();
+        let r = parse(&format!(
+            r#"{{"Results":[{{"Target":"t","Vulnerabilities":[{}]}}]}}"#,
+            many.join(",")
+        ))
+        .unwrap();
         assert_eq!((r.high, r.vulns.len()), (20, MAX_ITEMS));
     }
 
@@ -221,7 +272,10 @@ mod tests {
     #[ignore]
     fn scans_real_image() {
         let img = std::env::var("SKYSHIP_SCAN_IMAGE").unwrap_or_else(|_| "alpine:3.20".into());
-        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
         let r = rt.block_on(scan_image(&img)).unwrap();
         println!("{r:#?}");
     }
@@ -232,9 +286,16 @@ mod tests {
     fn scans_real_project() {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/hello");
         let cfg = Config::load_from(&dir).unwrap();
-        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
         let r = rt.block_on(scan_project(&cfg)).unwrap();
         println!("critical {} high {} secrets {}", r.critical, r.high, r.secrets_total);
-        assert!(rt.block_on(docker::image_platform(&format!("skyship-scan/{}:check", cfg.name))).is_err(), "a tag temporária deveria ter sido removida");
+        assert!(
+            rt.block_on(docker::image_platform(&format!("skyship-scan/{}:check", cfg.name)))
+                .is_err(),
+            "a tag temporária deveria ter sido removida"
+        );
     }
 }
