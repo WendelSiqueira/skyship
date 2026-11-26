@@ -67,12 +67,12 @@ needs. Step by step instructions are in [docs/permissions.md](docs/permissions.m
 | | Status |
 |---|---|
 | `init`, `policy`, `regions` | Work. |
-| `doctor` | Works. Used with a real account. |
+| `doctor` | Works. |
 | `login` | Written and its file handling is tested, but it has not been used interactively on a real account yet. |
 | `status` | Works against Lightsail and EC2. |
-| `deploy` to Lightsail | Works, including updating an app that already exists. Tested from the desktop app on a real account (new accounts can have a limit of zero container services; you may need to ask AWS to raise it). |
-| `deploy` to EC2 | Works, including updating an app. Tested from the desktop app on a real account. The address is plain `http://`: the EC2 destination has no HTTPS. |
-| Desktop app | Works on a real AWS account: deploying, updating and removing apps on Lightsail and EC2, the apps list and the skyship tag, the Trivy check, and publishing from a project folder, a local image or an archive. |
+| `deploy` to Lightsail | Works, including updating an app that already exists. Tested from the desktop app (new accounts can have a limit of zero container services; you may need to ask AWS to raise it). |
+| `deploy` to EC2 | Works, including updating an app. Tested from the desktop app. The address is plain `http://`: the EC2 destination has no HTTPS. |
+| Desktop app | Works on AWS: deploying, updating and removing apps on Lightsail and EC2, the apps list and the skyship tag, the Trivy check, and publishing from a project folder, a local image or an archive. |
 
 ## Questions
 
