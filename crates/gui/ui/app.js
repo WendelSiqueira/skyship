@@ -1194,24 +1194,52 @@ function renderAppsHeader() {
   title.classList.toggle('sub', Boolean(state.url));
 }
 
-async function loadApps() {
+/** Estados em que o app ainda está sendo criado, atualizado ou parado: vale reler a lista. */
+const TRANSIENT_STATE = /^(PENDING|DEPLOYING|CREATING|UPDATING|STOPPING|STARTING|SHUTTING-DOWN)$/i;
+const APPS_POLL_MS = 10000;
+const APPS_POLL_MAX = 120; // 20 minutos: depois disso o botão Atualizar continua valendo
+
+let appsTimer = null;
+let appsPolls = 0;
+
+/** Enquanto algum app estiver em transição e a tela de Apps aberta, relê a lista de tempos em tempos. */
+function scheduleAppsRefresh() {
+  clearTimeout(appsTimer);
+  appsTimer = null;
+  const apps = state.apps && state.apps.res.apps;
+  if (state.screen !== 'live' || !apps || !apps.some((a) => TRANSIENT_STATE.test(a.state))) { appsPolls = 0; return; }
+  if (appsPolls >= APPS_POLL_MAX) return;
+  appsTimer = setTimeout(() => {
+    appsTimer = null;
+    if (state.screen !== 'live') return;
+    appsPolls += 1;
+    loadApps({ silent: true });
+  }, APPS_POLL_MS);
+}
+
+async function loadApps({ silent = false } = {}) {
   if (!state.account) return;
+  if (!silent) appsPolls = 0;
   fillAppsRegions();
-  showError($('#apps-error'), '');
+  if (!silent) showError($('#apps-error'), '');
   const seq = ++appsSeq;
   const region = $('#apps-region').value || DEFAULT_REGION;
   state.appsRegion = region;
-  state.apps = null;
-  renderApps();
+  if (!silent) {
+    state.apps = null;
+    renderApps();
+  }
   try {
     const res = await invoke('list_apps', { profile: state.profile, region });
     if (seq !== appsSeq) return;
     state.apps = { region, res };
   } catch (e) {
     if (seq !== appsSeq) return;
+    if (silent && state.apps) { scheduleAppsRefresh(); return; } // falha de rede na releitura: mantém a lista e tenta de novo
     state.apps = { region, res: { apps: [], warnings: [String(e)] } };
   }
   renderApps();
+  scheduleAppsRefresh();
 }
 
 function appCard(app) {
@@ -1222,7 +1250,7 @@ function appCard(app) {
   if (app.managed) { const m = el('span', 'pill', t('a.managed')); m.title = t('a.managedTip'); name.append(m); }
   const sub = el('div', 'app-sub');
   const ok = /^(READY|RUNNING|ACTIVE)$/i.test(app.state);
-  const wait = /^(PENDING|DEPLOYING|CREATING|UPDATING|STOPPING)$/i.test(app.state);
+  const wait = TRANSIENT_STATE.test(app.state);
   sub.append(el('span', 'state' + (ok ? ' ok' : wait ? ' wait' : ''), app.state), el('span', 'mono', app.url || t('a.noUrl')));
   main.append(name, sub);
   card.append(main);

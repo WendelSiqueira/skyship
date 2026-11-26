@@ -141,6 +141,9 @@ allows scripts only from the app itself).
 - The apps list marks the apps created by skyship (the `skyship:name` tag, `AppSummary.managed`).
   The Remove button is disabled for the others unless the setting "allow deleting apps skyship did
   not create" (`delete_unmanaged`, off by default) is on; the backend enforces it too.
+- The apps list reloads itself every 10 seconds while an app is in a transitional state
+  (`PENDING`, `DEPLOYING`, `UPDATING`, …) and the Apps screen is open, for up to 20 minutes; a
+  failed reload keeps the list on screen. The Refresh button reloads on demand.
 - Publishing again with the same name, destination and region **updates** the app: Lightsail reuses
   the service and creates a new deployment; EC2 reuses the instance (found by its `skyship:name`
   tag) and swaps the container, with a few seconds of downtime. The size (`power` or instance type)
