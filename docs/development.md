@@ -21,6 +21,43 @@ To build without disturbing the rest of the system:
 nice -n 19 ionice -c3 cargo build
 ```
 
+## Windows
+
+Tested on Windows 11 with Docker Desktop. What it needs:
+
+- Rust with the MSVC toolchain and the C++ build tools, for example from PowerShell:
+
+  ```powershell
+  winget install --id Microsoft.VisualStudio.2022.BuildTools -e --override "--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+  winget install --id Rustlang.Rustup -e
+  # open a new terminal, then:
+  rustup default stable-msvc
+  ```
+
+- Docker Desktop with the WSL 2 backend, in **Linux containers** mode. skyship runs the `docker`
+  CLI, which reaches the Docker Desktop engine through its named pipe on its own; `DOCKER_HOST` and
+  `docker context` are respected. Windows containers mode does not work (images are built for
+  `linux/amd64`, and the Trivy check mounts `/var/run/docker.sock`, which only exists in the Linux
+  VM). A Docker engine installed only inside a WSL distro is not visible to a native `skyship.exe`.
+- WebView2 for the desktop app (it ships with Windows 11).
+
+`nice`/`ionice` do not exist there; `cargo build` as is. The same commands under
+[Build and test](#build-and-test) and [The desktop app](#the-desktop-app) apply, with
+`.\target\debug\skyship-gui.exe`.
+
+Things specific to Windows in the code:
+
+- `~/.aws` is `%USERPROFILE%\.aws` when `HOME` is not set (`login::home_dir`).
+- There is no file mode: the credentials file gets the ACL of the user profile folder, which is
+  private by default.
+- Paths go through `config::canonicalize`, which drops the `\\?\` prefix that `canonicalize` adds
+  on Windows, so messages and `docker build` get plain `C:\...` paths.
+- In a release build of the desktop app (`windows_subsystem = "windows"`), check that no console
+  window flashes when it runs `docker`; this has not been checked yet.
+- `.rar` needs `bsdtar`, which Windows ships as `tar.exe`, so `.rar` does not open there yet.
+- Git with `core.autocrlf=true` checks out shell scripts with CRLF; copied into a Linux image they
+  fail with `/bin/sh^M: not found`. Use a `.gitattributes` with `*.sh text eol=lf` in the project.
+
 ## The desktop app
 
 `crates/gui` is left out of the default build (`default-members` in the root `Cargo.toml`), because
