@@ -68,7 +68,7 @@ mais. Ajuste conforme as mensagens de `AccessDenied` que aparecerem.
       "Sid": "EcrSkyshipRepositories",
       "Effect": "Allow",
       "Action": [
-        "ecr:DescribeRepositories", "ecr:CreateRepository", "ecr:BatchCheckLayerAvailability",
+        "ecr:DescribeRepositories", "ecr:CreateRepository", "ecr:PutLifecyclePolicy", "ecr:BatchCheckLayerAvailability",
         "ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage"
       ],
       "Resource": "arn:aws:ecr:*:*:repository/skyship/*"
@@ -203,6 +203,7 @@ O seu usuário precisa destas permissões para fazer isso:
 |---|---|
 | `ecr:GetAuthorizationToken` | Fazer o login do Docker no ECR. |
 | `ecr:DescribeRepositories`, `ecr:CreateRepository` | Ver se o repositório `skyship/<nome>` existe e criá-lo se não existir. |
+| `ecr:PutLifecyclePolicy` | Definir a política de ciclo de vida do repositório: manter só as 3 imagens mais recentes e deixar o ECR apagar as mais antigas. Opcional: sem ela o deploy funciona, mas as imagens antigas se acumulam. |
 | `ecr:BatchCheckLayerAvailability`, `ecr:InitiateLayerUpload`, `ecr:UploadLayerPart`, `ecr:CompleteLayerUpload`, `ecr:PutImage` | Os passos do `docker push`: quais camadas o ECR já tem, o envio de cada camada e o registro da imagem. |
 | `ec2:DescribeInstances` | Achar a instância pela tag, esperar ela ficar `running`, ler o endereço público e montar a lista de apps. |
 | `ec2:DescribeInstanceStatus` | Ler os status checks (`initializing`, `ok`) mostrados no log e na lista de apps. Opcional. |
@@ -223,4 +224,6 @@ O seu usuário precisa destas permissões para fazer isso:
 
 Remover um app da EC2 encerra a instância. A role do IAM, o instance profile, o security group e as
 imagens do ECR continuam na conta, então a próxima publicação com o mesmo nome reaproveita os três
-primeiros. Só as imagens do ECR geram custos. Apague-as à mão se não for usar o app de novo.
+primeiros. Só as imagens do ECR geram custos, e o próprio ECR guarda apenas as 3 mais recentes (a
+política de ciclo de vida apaga as outras, de forma assíncrona: em até cerca de um dia). Apague o
+repositório à mão se não for usar o app de novo.
