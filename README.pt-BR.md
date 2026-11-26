@@ -59,8 +59,7 @@ build padrão: rode
 ### Dando acesso à sua conta
 
 Por favor, **não** use o seu login principal da AWS. Crie um usuário separado, que só pode fazer o
-que o skyship precisa. O passo a passo está em [docs/permissions.md](docs/permissions.md) (em
-inglês).
+que o skyship precisa. O passo a passo está em [docs/permissions.pt-BR.md](docs/permissions.pt-BR.md).
 
 ## O que funciona hoje
 
@@ -80,7 +79,7 @@ inglês).
 
 **É seguro dar minhas chaves?** Elas ficam no seu computador, em `~/.aws/credentials` com
 permissões restritas, e são conferidas na AWS antes de serem salvas. Use o usuário dedicado de
-[docs/permissions.md](docs/permissions.md), nunca a sua conta principal. Mais detalhes em
+[docs/permissions.pt-BR.md](docs/permissions.pt-BR.md), nunca a sua conta principal. Mais detalhes em
 [docs/security.md](docs/security.md).
 
 **Como atualizo um app?** Publique de novo com o mesmo nome, destino e região. O app de desktop
@@ -119,7 +118,7 @@ A documentação técnica está em inglês:
 
 - [docs/architecture.md](docs/architecture.md): como o código é organizado e como cada destino funciona
 - [docs/security.md](docs/security.md): contra o que a ferramenta protege e o que ainda está aberto
-- [docs/permissions.md](docs/permissions.md): as permissões exatas e como criar o usuário
+- [docs/permissions.pt-BR.md](docs/permissions.pt-BR.md): as permissões exatas e como criar o usuário (também em inglês)
 - [docs/development.md](docs/development.md): compilar, testar e a lista de lacunas conhecidas
 
 ## Licença
