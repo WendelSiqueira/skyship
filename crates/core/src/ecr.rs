@@ -12,8 +12,8 @@ pub struct Image {
     pub registry: String,
 }
 
-/// Garante o repositório, faz build local, login e push. Devolve a URI da imagem.
-pub async fn build_and_push(sdk: &aws_config::SdkConfig, cfg: &Config, account: &str, p: &Progress) -> Result<Image> {
+/// Etapa "Build": garante o repositório e constrói (ou etiqueta) a imagem localmente. Ainda não envia nada.
+pub async fn build(sdk: &aws_config::SdkConfig, cfg: &Config, account: &str, p: &Progress) -> Result<Image> {
     let ecr = Client::new(sdk);
     let repo = format!("skyship/{}", cfg.name);
 
@@ -43,7 +43,12 @@ pub async fn build_and_push(sdk: &aws_config::SdkConfig, cfg: &Config, account: 
         None => docker::build(&uri, &cfg.dockerfile, &cfg.context, &cfg.platform, p).await?,
     }
     p.done(Stage::Build);
+    Ok(Image { uri, registry })
+}
 
+/// Etapa "Upload": login no ECR e push da imagem.
+pub async fn push(sdk: &aws_config::SdkConfig, image: &Image, p: &Progress) -> Result<()> {
+    let ecr = Client::new(sdk);
     p.start(Stage::Upload);
     let auth = ecr.get_authorization_token().send().await?;
     let token = auth
@@ -53,8 +58,9 @@ pub async fn build_and_push(sdk: &aws_config::SdkConfig, cfg: &Config, account: 
         .context("ECR não devolveu token")?;
     let decoded = String::from_utf8(base64::engine::general_purpose::STANDARD.decode(token)?)?;
     let (user, pass) = decoded.split_once(':').context("token ECR em formato inesperado")?;
-    docker::login(&registry, user, pass, p).await?;
-    docker::push(&uri, p).await?;
+    docker::login(&image.registry, user, pass, p).await?;
+    docker::push(&image.uri, p).await?;
+    p.log(format!("imagem enviada ao ECR: {}", image.uri));
     p.done(Stage::Upload);
-    Ok(Image { uri, registry })
+    Ok(())
 }

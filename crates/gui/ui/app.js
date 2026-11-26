@@ -163,11 +163,16 @@ function showTip(anchor, text) {
   tipTimer = setTimeout(() => { tip.hidden = true; }, 1500);
 }
 
-function openUrl(url) {
+/** Abre o endereço no navegador do sistema. Se não der, copia o endereço (e o balão "Copiado" avisa). */
+function openUrl(url, btn) {
   if (!/^https?:\/\//i.test(url)) return;
+  const fallback = () => { if (btn) copyText(url, btn); };
   const opener = TAURI.opener;
-  if (opener && opener.openUrl) opener.openUrl(url);
-  else window.open(url, '_blank', 'noopener');
+  if (opener && opener.openUrl) {
+    Promise.resolve(opener.openUrl(url)).catch(fallback);
+  } else {
+    fallback();
+  }
 }
 
 function shortAccount(acc) {
@@ -496,6 +501,7 @@ async function enterProject() {
 
 /** Apps da conta na região escolhida, para saber se publicar vai atualizar um que já existe. */
 let existingSeq = 0;
+const EXISTING_TIMEOUT_MS = 15000;
 
 async function loadExisting() {
   if (!state.account) return;
@@ -504,6 +510,13 @@ async function loadExisting() {
   if (state.existingLoading === region) return; // já buscando esta região
   state.existingLoading = region;
   const seq = ++existingSeq;
+  // Se a consulta demorar demais, o botão não fica bloqueado para sempre: trata como app novo
+  // (e, se a resposta chegar depois, ela substitui isto e a tela se corrige).
+  const giveUp = setTimeout(() => {
+    if (seq !== existingSeq || (state.existing && state.existing.region === region)) return;
+    state.existing = { region, apps: [] };
+    if (state.screen === 'project') renderProject();
+  }, EXISTING_TIMEOUT_MS);
   try {
     const res = await invoke('list_apps', { profile: state.profile, region });
     if (seq !== existingSeq) { state.existingLoading = null; return; }
@@ -511,9 +524,16 @@ async function loadExisting() {
   } catch {
     if (seq !== existingSeq) { state.existingLoading = null; return; }
     state.existing = { region, apps: [] }; // sem a lista, trata como app novo
+  } finally {
+    clearTimeout(giveUp);
   }
   state.existingLoading = null;
-  if (state.screen === 'project') renderUpdateNote();
+  if (state.screen === 'project') renderProject();
+}
+
+/** Ainda estamos descobrindo se já existe um app com esse nome na região escolhida? */
+function checkingExisting() {
+  return Boolean(state.account) && (!state.existing || state.existing.region !== state.draft.region);
 }
 
 function findExisting() {
@@ -528,7 +548,12 @@ function renderUpdateNote() {
   const d = state.draft;
   const ex = findExisting();
   const note = $('#update-note');
-  if (!state.deploying) $('#publish').textContent = ex ? t('p.update', { name: d.name }) : t('p.publish');
+  const checking = checkingExisting();
+  if (!state.deploying) {
+    // enquanto a conta é consultada o botão fica bloqueado: publicar antes disso passaria por cima de um app que já existe
+    $('#publish').textContent = checking ? t('p.checking') : ex ? t('p.update', { name: d.name }) : t('p.publish');
+    $('#publish').disabled = checking || !canPublish(currentInfo());
+  }
   if (!ex) { note.hidden = true; return; }
   const lines = [t('p.updateNote', { name: d.name, dest: d.target === 'ec2' ? 'EC2' : 'Lightsail', region: regionLabel(d.region), state: ex.state })];
   if (d.target === 'ec2') lines.push(t('p.updateEc2'));
@@ -713,6 +738,7 @@ function readProjectForm() {
 }
 
 async function publish() {
+  if (checkingExisting()) return;
   const err = $('#project-error');
   showError(err, '');
   readProjectForm();
@@ -1207,7 +1233,8 @@ function scheduleAppsRefresh() {
   clearTimeout(appsTimer);
   appsTimer = null;
   const apps = state.apps && state.apps.res.apps;
-  if (state.screen !== 'live' || !apps || !apps.some((a) => TRANSIENT_STATE.test(a.state))) { appsPolls = 0; return; }
+  const busy = (a) => TRANSIENT_STATE.test(a.state) || a.checks === 'initializing';
+  if (state.screen !== 'live' || !apps || !apps.some(busy)) { appsPolls = 0; return; }
   if (appsPolls >= APPS_POLL_MAX) return;
   appsTimer = setTimeout(() => {
     appsTimer = null;
@@ -1251,7 +1278,16 @@ function appCard(app) {
   const sub = el('div', 'app-sub');
   const ok = /^(READY|RUNNING|ACTIVE)$/i.test(app.state);
   const wait = TRANSIENT_STATE.test(app.state);
-  sub.append(el('span', 'state' + (ok ? ' ok' : wait ? ' wait' : ''), app.state), el('span', 'mono', app.url || t('a.noUrl')));
+  sub.append(el('span', 'state' + (ok ? ' ok' : wait ? ' wait' : ''), app.state));
+  if (app.checks) {
+    // status checks da instância (EC2): "running" não quer dizer que já passou nas verificações
+    const bad = app.checks === 'impaired';
+    const good = app.checks === 'ok';
+    const chk = el('span', 'state' + (good ? ' ok' : bad ? ' bad' : ' wait'), t('a.checks.' + app.checks));
+    chk.title = t('a.checksTip');
+    sub.append(chk);
+  }
+  sub.append(el('span', 'mono', app.url || t('a.noUrl')));
   main.append(name, sub);
   card.append(main);
   if (app.url) {
@@ -1465,7 +1501,7 @@ function wire() {
 
   // no ar
   $('#copy-url').addEventListener('click', (e) => copyText(state.url, e.currentTarget));
-  $('#open-url').addEventListener('click', () => state.url && openUrl(state.url));
+  $('#open-url').addEventListener('click', (e) => state.url && openUrl(state.url, e.currentTarget));
   $('#new-version').addEventListener('click', startDeploy);
   $('#tech-details').addEventListener('click', () => { state.deploying = false; showScreen('deploy'); });
   $('#other-project').addEventListener('click', () => {
@@ -1491,7 +1527,7 @@ function wire() {
     const rm = e.target.closest('[data-remove-name]');
     if (rm) { if (!rm.disabled) removeListedApp(rm.dataset.removeName, rm.dataset.removeTarget, rm.dataset.removeRegion, rm.dataset.removeManaged === 'true'); return; }
     const o = e.target.closest('[data-open]');
-    if (o) openUrl(o.dataset.open);
+    if (o) openUrl(o.dataset.open, o);
   });
 }
 

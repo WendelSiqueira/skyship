@@ -82,13 +82,20 @@ No ECR: it uses the Lightsail registry of the service itself.
 
 Uses ECR as the registry and SSM to run commands (no SSH, no key pair, only port 80 open).
 
-1. `ecr.rs`: ensure the `skyship/<name>` repository, build, login and push (tag = timestamp).
-2. Ensure the IAM role + instance profile `skyship-<name>` (SSM + read access to ECR) and the
-   security group `skyship-<name>` (port 80).
-3. Find the instance by its `skyship:name` tag; if none exists, launch one (Amazon Linux 2023, the
-   user data installs Docker). Wait until it is `running` and the SSM agent is online.
-4. `SendCommand` (`AWS-RunShellScript`): log in to ECR, `docker pull`, recreate the `app`
-   container with `-p 80:<port>` and `--restart unless-stopped`.
+The stages run in the order the screen shows them: Build, Service, Upload, Publish, WaitLive.
+
+1. **Build** (`ecr::build`): ensure the `skyship/<name>` repository and build the image locally
+   (tag = timestamp). Nothing is sent yet.
+2. **Service** (`ec2::prepare`): ensure the IAM role + instance profile `skyship-<name>` (SSM +
+   read access to ECR) and the security group `skyship-<name>` (port 80). Find the instance by its
+   `skyship:name` tag; if none exists, launch one (Amazon Linux 2023, the user data installs
+   Docker). Wait until it is `running` and the SSM agent is online, and log its status checks.
+3. **Upload** (`ecr::push`): log in to ECR and push the image.
+4. **Publish** (`ec2::publish`): `SendCommand` (`AWS-RunShellScript`): log in to ECR, `docker pull`,
+   recreate the `app` container with `-p 80:<port>` and `--restart unless-stopped`.
+5. **WaitLive**: poll `http://<ip>/` until it answers with any HTTP status (up to 5 minutes), logging
+   the instance status checks (`ok`, `initializing`, `impaired`) every 15 seconds. The address is
+   plain `http://`: the instance has no TLS and only port 80 is open.
 
 `destroy` for EC2 terminates the instance but keeps the IAM role and the security group. ECR is
 never cleaned: each deploy leaves a new image there.

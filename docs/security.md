@@ -95,7 +95,9 @@ back. `Cargo.lock` is versioned on purpose (the project builds binaries).
 - AWS keys in plain text in `~/.aws/credentials`.
 - `docker` is found through `PATH`. A fake `docker` earlier in the `PATH` would receive the registry
   password. Exploiting this needs control of your environment, so the priority is low.
-- The EC2 policy grants `iam:CreateRole` and `iam:PassRole` on every resource.
+- The EC2 policy still uses `Resource: "*"` where AWS cannot limit by resource (`RunInstances`,
+  security groups, the read calls) and for the ECR login token. IAM, ECR repositories and
+  starting/terminating instances are limited to what skyship creates.
 - The desktop app's content security policy allows inline styles (`style-src 'unsafe-inline'`).
   Scripts are limited to the app's own files. The access keys typed in the app go through the
   webview to the Rust side once, and are not stored by the frontend.

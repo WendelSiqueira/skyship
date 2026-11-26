@@ -78,6 +78,8 @@ pub struct AppSummary {
     pub size: Option<String>,
     /// Criado ou marcado pelo skyship (tag `skyship:name`). Os outros foram criados por fora.
     pub managed: bool,
+    /// Só na EC2: resumo dos status checks da instância (`ok`, `initializing`, `impaired`...).
+    pub checks: Option<String>,
 }
 
 /// Resultado de [`list_apps`]: o que foi achado e o que não foi possível consultar.
@@ -121,9 +123,13 @@ pub async fn deploy(aws: &Aws, cfg: &Config, progress: &Progress) -> Result<Outc
     }
     let account = aws.account().await?; // falha cedo se as credenciais estiverem erradas
     let url = match cfg.target {
+        // Ordem das etapas na tela: Build, Service, Upload, Publish, WaitLive. A instância é preparada
+        // antes do envio da imagem para que as etapas apareçam na ordem em que acontecem.
         Target::Ec2 => {
-            let image = ecr::build_and_push(&aws.sdk, cfg, &account, progress).await?;
-            ec2::deploy(&aws.sdk, cfg, &image, progress).await?
+            let image = ecr::build(&aws.sdk, cfg, &account, progress).await?;
+            let instance = ec2::prepare(&aws.sdk, cfg, progress).await?;
+            ecr::push(&aws.sdk, &image, progress).await?;
+            ec2::publish(&aws.sdk, cfg, &instance, &image, progress).await?
         }
         // Lightsail usa o registry do próprio serviço, sem ECR
         Target::Lightsail => lightsail::deploy(&aws.sdk, cfg, progress).await?,

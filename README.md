@@ -70,8 +70,8 @@ needs. Step by step instructions are in [docs/permissions.md](docs/permissions.m
 | `login` | Written and its file handling is tested, but it has not been used interactively on a real account yet. |
 | `status` | Works against Lightsail. |
 | `deploy` to Lightsail | Works from the desktop app with a small static site, including updating an app that already exists (new accounts can have a limit of zero container services; you may need to ask AWS to raise it). Not tried with other apps. |
-| `deploy` to EC2 | Written, **never run**. |
-| Desktop app | Builds and runs. Deploying and updating a small static site on Lightsail, the apps list and the skyship tag were done on a real account. Removing an app from the list, the Trivy check, and publishing from a local image or an archive were only checked with a fake backend. |
+| `deploy` to EC2 | Works from the desktop app with a small static site (a deploy and an update). The address is plain `http://`: the EC2 destination has no HTTPS. Not tried with other apps. |
+| Desktop app | Builds and runs. Deploying and updating a small static site on Lightsail and on EC2, the apps list and the skyship tag were done on a real account. Removing an app from the list, the Trivy check, and publishing from a local image or an archive were only checked with a fake backend. |
 
 ## Questions
 

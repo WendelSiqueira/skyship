@@ -207,8 +207,59 @@ async fn wait_ssm(ssm: &aws_sdk_ssm::Client, id: &str, p: &Progress) -> Result<(
     bail!("agente SSM não ficou online em {id}")
 }
 
-/// Devolve a URL pública do app.
-pub async fn deploy(sdk: &aws_config::SdkConfig, cfg: &Config, image: &Image, p: &Progress) -> Result<String> {
+/// Instância pronta para receber o app.
+pub struct Instance {
+    pub id: String,
+    pub ip: String,
+}
+
+/// Resume os status checks (do sistema e da instância) em uma palavra: `ok` só quando os dois passaram.
+pub fn summarize_checks(system: &str, instance: &str) -> &'static str {
+    let both = [system, instance];
+    if both.contains(&"impaired") {
+        "impaired"
+    } else if both.contains(&"initializing") {
+        "initializing"
+    } else if both.iter().all(|s| *s == "ok") {
+        "ok"
+    } else {
+        "insufficient-data"
+    }
+}
+
+/// Status checks da instância, como na coluna "Status check" do console da AWS. `None` se não foi possível
+/// ler (por exemplo, falta a permissão `ec2:DescribeInstanceStatus`).
+async fn instance_checks(ec2: &aws_sdk_ec2::Client, ids: &[String]) -> Vec<(String, String)> {
+    let Ok(out) = ec2
+        .describe_instance_status()
+        .set_instance_ids(Some(ids.to_vec()))
+        .include_all_instances(true)
+        .send()
+        .await
+    else {
+        return vec![];
+    };
+    out.instance_statuses()
+        .iter()
+        .filter_map(|s| {
+            let id = s.instance_id()?.to_string();
+            let system = s
+                .system_status()
+                .and_then(|x| x.status())
+                .map(|x| x.as_str())
+                .unwrap_or("");
+            let inst = s
+                .instance_status()
+                .and_then(|x| x.status())
+                .map(|x| x.as_str())
+                .unwrap_or("");
+            Some((id, summarize_checks(system, inst).to_string()))
+        })
+        .collect()
+}
+
+/// Etapa "Service": cria ou acorda a instância e espera o agente SSM. Devolve o id e o IP público.
+pub async fn prepare(sdk: &aws_config::SdkConfig, cfg: &Config, p: &Progress) -> Result<Instance> {
     let ec2 = aws_sdk_ec2::Client::new(sdk);
     let ssm = aws_sdk_ssm::Client::new(sdk);
 
@@ -216,7 +267,25 @@ pub async fn deploy(sdk: &aws_config::SdkConfig, cfg: &Config, image: &Image, p:
     let id = ensure_instance(sdk, cfg, p).await?;
     let ip = wait_running(&ec2, &id).await?;
     wait_ssm(&ssm, &id, p).await?;
+    if let Some((_, checks)) = instance_checks(&ec2, std::slice::from_ref(&id)).await.first() {
+        p.log(format!("status checks da instância: {checks}"));
+    }
     p.done(Stage::Service);
+    Ok(Instance { id, ip })
+}
+
+/// Etapas "Publish" e "WaitLive": baixa a imagem na instância, troca o container e espera o app responder.
+/// Devolve a URL pública do app (`http://`: a EC2 não tem HTTPS).
+pub async fn publish(
+    sdk: &aws_config::SdkConfig,
+    cfg: &Config,
+    instance: &Instance,
+    image: &Image,
+    p: &Progress,
+) -> Result<String> {
+    let ec2 = aws_sdk_ec2::Client::new(sdk);
+    let ssm = aws_sdk_ssm::Client::new(sdk);
+    let Instance { id, ip } = instance;
 
     let script = vec![
         "until command -v docker >/dev/null 2>&1 && systemctl is-active --quiet docker; do sleep 3; done".to_string(),
@@ -234,10 +303,13 @@ pub async fn deploy(sdk: &aws_config::SdkConfig, cfg: &Config, image: &Image, p:
     ];
 
     p.start(Stage::Publish);
-    p.log(format!("executando deploy na instância {id}"));
+    p.log(format!(
+        "executando deploy na instância {id} com a imagem {}",
+        image.uri
+    ));
     let cmd_id = ssm
         .send_command()
-        .instance_ids(&id)
+        .instance_ids(id)
         .document_name("AWS-RunShellScript")
         .parameters("commands", script)
         .send()
@@ -247,12 +319,14 @@ pub async fn deploy(sdk: &aws_config::SdkConfig, cfg: &Config, image: &Image, p:
         .context("sem command id")?
         .to_string();
 
-    for _ in 0..120 {
+    // até 15 minutos: puxar uma imagem grande pode demorar
+    let mut finished = false;
+    for _ in 0..300 {
         sleep(Duration::from_secs(3)).await;
         let Ok(inv) = ssm
             .get_command_invocation()
             .command_id(&cmd_id)
-            .instance_id(&id)
+            .instance_id(id)
             .send()
             .await
         else {
@@ -260,10 +334,8 @@ pub async fn deploy(sdk: &aws_config::SdkConfig, cfg: &Config, image: &Image, p:
         };
         match inv.status().map(|s| s.as_str()) {
             Some("Success") => {
-                p.done(Stage::Publish);
-                p.start(Stage::WaitLive);
-                p.done(Stage::WaitLive);
-                return Ok(format!("http://{ip}"));
+                finished = true;
+                break;
             }
             Some("Failed") | Some("Cancelled") | Some("TimedOut") => {
                 bail!(
@@ -275,7 +347,58 @@ pub async fn deploy(sdk: &aws_config::SdkConfig, cfg: &Config, image: &Image, p:
             _ => {}
         }
     }
-    bail!("deploy não terminou a tempo")
+    if !finished {
+        bail!("deploy não terminou a tempo");
+    }
+    p.done(Stage::Publish);
+
+    // O container já foi iniciado; agora espera a porta 80 responder e mostra os status checks da instância.
+    p.start(Stage::WaitLive);
+    let url = format!("http://{ip}");
+    let mut last_log = Duration::ZERO;
+    let started = std::time::Instant::now();
+    for _ in 0..60 {
+        if http_responds(ip, 80).await {
+            let checks = instance_checks(&ec2, std::slice::from_ref(id)).await;
+            let state = checks.first().map(|c| c.1.as_str()).unwrap_or("?");
+            p.log(format!(
+                "o app respondeu em {url} (status checks da instância: {state})"
+            ));
+            p.done(Stage::WaitLive);
+            return Ok(url);
+        }
+        let elapsed = started.elapsed();
+        if elapsed - last_log >= Duration::from_secs(15) {
+            last_log = elapsed;
+            let checks = instance_checks(&ec2, std::slice::from_ref(id)).await;
+            let state = checks.first().map(|c| c.1.as_str()).unwrap_or("?");
+            p.log(format!(
+                "esperando o app responder em {url} (status checks da instância: {state})"
+            ));
+        }
+        sleep(Duration::from_secs(5)).await;
+    }
+    bail!(
+        "o container subiu, mas a porta 80 de {ip} não respondeu em 5 minutos; veja os status checks da instância no console da AWS"
+    )
+}
+
+/// A porta responde HTTP? Qualquer resposta HTTP serve, mesmo com erro: o que importa é o app estar de pé.
+async fn http_responds(host: &str, port: u16) -> bool {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let probe = async {
+        let mut s = tokio::net::TcpStream::connect((host, port)).await.ok()?;
+        s.write_all(format!("GET / HTTP/1.0\r\nHost: {host}\r\nConnection: close\r\n\r\n").as_bytes())
+            .await
+            .ok()?;
+        let mut first = [0u8; 7];
+        s.read_exact(&mut first).await.ok()?;
+        Some(first.starts_with(b"HTTP/1."))
+    };
+    matches!(
+        tokio::time::timeout(Duration::from_secs(5), probe).await,
+        Ok(Some(true))
+    )
 }
 
 pub async fn status(sdk: &aws_config::SdkConfig, cfg: &Config) -> Result<Vec<StatusEntry>> {
@@ -308,7 +431,7 @@ pub async fn list(sdk: &aws_config::SdkConfig, region: &str) -> Result<Vec<AppSu
         .send()
         .await
         .map_err(|e| anyhow::anyhow!("{}", aws_sdk_ec2::error::DisplayErrorContext(&e)))?;
-    let mut apps = vec![];
+    let mut apps: Vec<AppSummary> = vec![];
     for r in out.reservations() {
         for i in r.instances() {
             let name = i
@@ -331,10 +454,25 @@ pub async fn list(sdk: &aws_config::SdkConfig, region: &str) -> Result<Vec<AppSu
                 region: region.to_string(),
                 size: i.instance_type().map(|t| t.as_str().to_string()),
                 managed: true, // só entram na lista as instâncias com a tag do skyship
+                checks: None,
             });
         }
     }
+    // status checks (a coluna "Status check" do console); sem a permissão, ficam em branco
+    let ids: Vec<String> = ids_of_instances(&out);
+    let checks = instance_checks(&ec2, &ids).await;
+    for (app, id) in apps.iter_mut().zip(ids.iter()) {
+        app.checks = checks.iter().find(|(i, _)| i == id).map(|(_, c)| c.clone());
+    }
     Ok(apps)
+}
+
+fn ids_of_instances(out: &aws_sdk_ec2::operation::describe_instances::DescribeInstancesOutput) -> Vec<String> {
+    out.reservations()
+        .iter()
+        .flat_map(|r| r.instances())
+        .filter_map(|i| i.instance_id().map(String::from))
+        .collect()
 }
 
 pub async fn destroy(sdk: &aws_config::SdkConfig, cfg: &Config, p: &Progress) -> Result<()> {
@@ -351,4 +489,62 @@ pub async fn destroy(sdk: &aws_config::SdkConfig, cfg: &Config, p: &Progress) ->
         res_name(cfg)
     ));
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{http_responds, summarize_checks};
+    use tokio::io::AsyncWriteExt;
+
+    #[test]
+    fn checks_are_ok_only_when_both_pass() {
+        assert_eq!(summarize_checks("ok", "ok"), "ok");
+        assert_eq!(summarize_checks("initializing", "initializing"), "initializing");
+        assert_eq!(summarize_checks("ok", "initializing"), "initializing");
+        assert_eq!(summarize_checks("ok", "impaired"), "impaired");
+        assert_eq!(summarize_checks("initializing", "impaired"), "impaired");
+        assert_eq!(summarize_checks("", ""), "insufficient-data");
+        assert_eq!(summarize_checks("not-applicable", "ok"), "insufficient-data");
+    }
+
+    fn rt() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn any_http_answer_counts_as_alive_even_an_error() {
+        rt().block_on(async {
+            for reply in ["HTTP/1.1 200 OK\r\n\r\n", "HTTP/1.0 503 Service Unavailable\r\n\r\n"] {
+                let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+                let port = l.local_addr().unwrap().port();
+                tokio::spawn(async move {
+                    let (mut s, _) = l.accept().await.unwrap();
+                    s.write_all(reply.as_bytes()).await.unwrap();
+                });
+                assert!(http_responds("127.0.0.1", port).await, "{reply}");
+            }
+        });
+    }
+
+    #[test]
+    fn closed_port_or_non_http_is_not_alive() {
+        rt().block_on(async {
+            // porta sem ninguém ouvindo
+            let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let closed = l.local_addr().unwrap().port();
+            drop(l);
+            assert!(!http_responds("127.0.0.1", closed).await);
+            // alguém ouve, mas não fala HTTP
+            let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let port = l.local_addr().unwrap().port();
+            tokio::spawn(async move {
+                let (mut s, _) = l.accept().await.unwrap();
+                s.write_all(b"SSH-2.0-OpenSSH\r\n").await.unwrap();
+            });
+            assert!(!http_responds("127.0.0.1", port).await);
+        });
+    }
 }

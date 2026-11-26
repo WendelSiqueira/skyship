@@ -24,25 +24,100 @@ const POLICY_LIGHTSAIL: &str = r#"{
   }]
 }"#;
 
-// Derivada da leitura do código; ainda NÃO testada contra a AWS.
+// Derivada da leitura do código; ainda NÃO testada contra a AWS. Cada permissão vale só para o que o
+// skyship cria: repositórios `skyship/*`, roles e profiles `skyship-*` e instâncias com a tag
+// `skyship:name`. O que a AWS não deixa limitar por recurso (RunInstances, grupos de segurança,
+// leituras) fica em "*".
 const POLICY_EC2: &str = r#"{
   "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Action": [
-      "ecr:GetAuthorizationToken", "ecr:DescribeRepositories", "ecr:CreateRepository",
-      "ecr:BatchCheckLayerAvailability", "ecr:InitiateLayerUpload", "ecr:UploadLayerPart",
-      "ecr:CompleteLayerUpload", "ecr:PutImage",
-      "ec2:DescribeInstances", "ec2:RunInstances", "ec2:StartInstances", "ec2:TerminateInstances",
-      "ec2:CreateTags", "ec2:DescribeSecurityGroups", "ec2:CreateSecurityGroup",
-      "ec2:AuthorizeSecurityGroupIngress",
-      "iam:GetRole", "iam:CreateRole", "iam:AttachRolePolicy", "iam:GetInstanceProfile",
-      "iam:CreateInstanceProfile", "iam:AddRoleToInstanceProfile", "iam:PassRole",
-      "ssm:GetParameter", "ssm:DescribeInstanceInformation", "ssm:SendCommand",
-      "ssm:GetCommandInvocation"
-    ],
-    "Resource": "*"
-  }]
+  "Statement": [
+    {
+      "Sid": "EcrLogin",
+      "Effect": "Allow",
+      "Action": "ecr:GetAuthorizationToken",
+      "Resource": "*"
+    },
+    {
+      "Sid": "EcrSkyshipRepositories",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:DescribeRepositories", "ecr:CreateRepository", "ecr:BatchCheckLayerAvailability",
+        "ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage"
+      ],
+      "Resource": "arn:aws:ecr:*:*:repository/skyship/*"
+    },
+    {
+      "Sid": "Ec2ReadAndCreate",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeInstances", "ec2:DescribeInstanceStatus", "ec2:DescribeSecurityGroups", "ec2:RunInstances",
+        "ec2:CreateSecurityGroup", "ec2:AuthorizeSecurityGroupIngress"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "Ec2TagOnLaunch",
+      "Effect": "Allow",
+      "Action": "ec2:CreateTags",
+      "Resource": "arn:aws:ec2:*:*:instance/*",
+      "Condition": { "StringEquals": { "ec2:CreateAction": "RunInstances" } }
+    },
+    {
+      "Sid": "Ec2OnlySkyshipInstances",
+      "Effect": "Allow",
+      "Action": ["ec2:StartInstances", "ec2:TerminateInstances"],
+      "Resource": "arn:aws:ec2:*:*:instance/*",
+      "Condition": { "Null": { "ec2:ResourceTag/skyship:name": "false" } }
+    },
+    {
+      "Sid": "IamSkyshipRoleAndProfile",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRole", "iam:CreateRole", "iam:GetInstanceProfile",
+        "iam:CreateInstanceProfile", "iam:AddRoleToInstanceProfile"
+      ],
+      "Resource": ["arn:aws:iam::*:role/skyship-*", "arn:aws:iam::*:instance-profile/skyship-*"]
+    },
+    {
+      "Sid": "IamAttachOnlyTheTwoManagedPolicies",
+      "Effect": "Allow",
+      "Action": "iam:AttachRolePolicy",
+      "Resource": "arn:aws:iam::*:role/skyship-*",
+      "Condition": {
+        "ArnEquals": {
+          "iam:PolicyARN": [
+            "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+            "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "PassTheRoleOnlyToEc2",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::*:role/skyship-*",
+      "Condition": { "StringEquals": { "iam:PassedToService": "ec2.amazonaws.com" } }
+    },
+    {
+      "Sid": "SsmAmiLookup",
+      "Effect": "Allow",
+      "Action": "ssm:GetParameter",
+      "Resource": "arn:aws:ssm:*::parameter/aws/service/ami-amazon-linux-latest/*"
+    },
+    {
+      "Sid": "SsmRunCommand",
+      "Effect": "Allow",
+      "Action": "ssm:SendCommand",
+      "Resource": ["arn:aws:ssm:*:*:document/AWS-RunShellScript", "arn:aws:ec2:*:*:instance/*"]
+    },
+    {
+      "Sid": "SsmRead",
+      "Effect": "Allow",
+      "Action": ["ssm:DescribeInstanceInformation", "ssm:GetCommandInvocation"],
+      "Resource": "*"
+    }
+  ]
 }"#;
 
 /// Política IAM (JSON) necessária para o destino.
@@ -204,7 +279,8 @@ fn write_private(path: &PathBuf, content: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_profile_names, upsert_profile};
+    use super::{parse_profile_names, policy, upsert_profile};
+    use crate::config::Target;
 
     #[test]
     fn reads_only_profile_names() {
@@ -233,5 +309,93 @@ mod tests {
         assert!(out.contains("[b]\ny = 2"));
         assert!(out.contains("aws_access_key_id = NEW"));
         assert!(!out.contains("OLD"));
+    }
+
+    fn statements(target: Target) -> Vec<serde_json::Value> {
+        let v: serde_json::Value = serde_json::from_str(policy(target)).expect("a política precisa ser um JSON válido");
+        v["Statement"].as_array().expect("Statement").clone()
+    }
+
+    fn list(v: &serde_json::Value) -> Vec<String> {
+        match v {
+            serde_json::Value::String(s) => vec![s.clone()],
+            serde_json::Value::Array(a) => a.iter().filter_map(|x| x.as_str().map(String::from)).collect(),
+            _ => vec![],
+        }
+    }
+
+    #[test]
+    fn both_policies_are_valid_json() {
+        assert!(!statements(Target::Lightsail).is_empty());
+        assert!(!statements(Target::Ec2).is_empty());
+    }
+
+    #[test]
+    fn ec2_policy_never_opens_iam_or_ecr_repositories_to_every_resource() {
+        for st in statements(Target::Ec2) {
+            let actions = list(&st["Action"]);
+            let resources = list(&st["Resource"]);
+            let open = resources.iter().any(|r| r == "*");
+            for a in &actions {
+                if a.starts_with("iam:") {
+                    assert!(!open, "{a} não pode valer para todos os recursos");
+                }
+                // só o login do ECR não aceita limitar por recurso
+                if a.starts_with("ecr:") && a != "ecr:GetAuthorizationToken" {
+                    assert!(!open, "{a} deve valer só para repositórios do skyship");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn pass_role_is_limited_to_skyship_roles_and_the_ec2_service() {
+        let pass: Vec<_> = statements(Target::Ec2)
+            .into_iter()
+            .filter(|s| list(&s["Action"]).iter().any(|a| a == "iam:PassRole"))
+            .collect();
+        assert_eq!(pass.len(), 1);
+        assert_eq!(list(&pass[0]["Resource"]), vec!["arn:aws:iam::*:role/skyship-*"]);
+        assert_eq!(
+            pass[0]["Condition"]["StringEquals"]["iam:PassedToService"],
+            "ec2.amazonaws.com"
+        );
+    }
+
+    #[test]
+    fn ec2_policy_covers_every_action_the_code_calls() {
+        // as chamadas que ec2.rs, ecr.rs e lightsail.rs fazem na EC2 (se o código passar a usar outra, entra aqui)
+        let allowed: Vec<String> = statements(Target::Ec2)
+            .iter()
+            .flat_map(|s| list(&s["Action"]))
+            .collect();
+        for a in [
+            "ecr:GetAuthorizationToken",
+            "ecr:DescribeRepositories",
+            "ecr:CreateRepository",
+            "ecr:PutImage",
+            "ec2:DescribeInstances",
+            "ec2:DescribeInstanceStatus",
+            "ec2:RunInstances",
+            "ec2:StartInstances",
+            "ec2:TerminateInstances",
+            "ec2:CreateTags",
+            "ec2:DescribeSecurityGroups",
+            "ec2:CreateSecurityGroup",
+            "ec2:AuthorizeSecurityGroupIngress",
+            "iam:GetRole",
+            "iam:CreateRole",
+            "iam:AttachRolePolicy",
+            "iam:GetInstanceProfile",
+            "iam:CreateInstanceProfile",
+            "iam:AddRoleToInstanceProfile",
+            "iam:PassRole",
+            "ssm:GetParameter",
+            "ssm:DescribeInstanceInformation",
+            "ssm:SendCommand",
+            "ssm:GetCommandInvocation",
+        ] {
+            assert!(allowed.iter().any(|x| x == a), "falta {a} na política da EC2");
+        }
     }
 }
