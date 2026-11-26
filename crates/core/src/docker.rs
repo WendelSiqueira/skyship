@@ -81,19 +81,6 @@ pub async fn repo_digest(image: &str, registry: &str) -> Result<String> {
         .context("não achei o digest da imagem após o push")
 }
 
-#[cfg(test)]
-mod tests {
-    use super::platform_matches;
-
-    #[test]
-    fn platform_comparison() {
-        assert!(platform_matches("linux/amd64", "linux/amd64"));
-        assert!(!platform_matches("linux/amd64", "linux/arm64"));
-        assert!(!platform_matches("linux/amd64", "windows/amd64"));
-        assert!(!platform_matches("linux", "linux/amd64"));
-        assert!(!platform_matches("linux/amd64", ""));
-    }
-}
 
 pub async fn login(registry: &str, user: &str, password: &str, p: &Progress) -> Result<()> {
     let mut child = Command::new("docker")
@@ -142,5 +129,19 @@ async fn forward<R: AsyncRead + Unpin>(r: R, p: Progress) {
     let mut lines = BufReader::new(r).lines();
     while let Ok(Some(line)) = lines.next_line().await {
         p.log(line);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::platform_matches;
+
+    #[test]
+    fn platform_comparison() {
+        assert!(platform_matches("linux/amd64", "linux/amd64"));
+        assert!(!platform_matches("linux/amd64", "linux/arm64"));
+        assert!(!platform_matches("linux/amd64", "windows/amd64"));
+        assert!(!platform_matches("linux", "linux/amd64"));
+        assert!(!platform_matches("linux/amd64", ""));
     }
 }

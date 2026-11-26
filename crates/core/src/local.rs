@@ -156,8 +156,8 @@ pub fn parse(images_json: &str, containers_json: &str) -> Result<LocalDocker> {
     }
     // em execução primeiro, depois as que expõem porta (parecem aplicações), depois por nome
     images.sort_by(|a, b| {
-        (b.running.len() > 0, !b.exposed_ports.is_empty(), &a.reference)
-            .cmp(&(a.running.len() > 0, !a.exposed_ports.is_empty(), &b.reference))
+        (!b.running.is_empty(), !b.exposed_ports.is_empty(), &a.reference)
+            .cmp(&(!a.running.is_empty(), !a.exposed_ports.is_empty(), &b.reference))
     });
     Ok(LocalDocker { images, containers })
 }
