@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>skyship</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <svg class="logo" width="28" height="28" viewBox="0 0 32 32" role="img" aria-label="skyship">
+        <rect class="lg-bg" width="32" height="32" rx="8"/>
+        <g transform="translate(0 0.6)">
+          <g class="lg-cloud">
+            <path d="M4.5 23.4V22.6Q4.5 19.3 8 19.3H24Q27.5 19.3 27.5 22.6V23.4Z"/>
+            <circle cx="8" cy="23.4" r="3.5"/><circle cx="16" cy="23.4" r="4.8"/><circle cx="24" cy="23.4" r="3.5"/>
+          </g>
+          <g class="lg-boat">
+            <path d="M16.5 3.5V16.2H25Q23.6 8.6 16.5 3.5Z"/>
+            <path opacity="0.85" d="M14.5 5.5L6.2 16.2H14.5Z"/>
+            <path d="M5 17.5H27L25.5 21H9Z"/>
+          </g>
+        </g>
+      </svg>
+      <span class="brand-name">skyship</span>
+    </div>
+
+    <nav id="steps" class="steps" aria-label="Progresso"></nav>
+
+    <div class="side-foot">
+      <div id="menu" class="menu" role="menu" hidden>
+        <div class="menu-title" data-i18n="language"></div>
+        <button class="menu-item" role="menuitemradio" data-lang="pt">
+          <span class="menu-label">
+            <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><defs><clipPath id="clip-br"><circle cx="9" cy="9" r="9"/></clipPath></defs><g clip-path="url(#clip-br)"><rect width="18" height="18" fill="#009C3B"/><path d="M9 3.2L15.6 9L9 14.8L2.4 9z" fill="#FFDF00"/><circle cx="9" cy="9" r="3.3" fill="#002776"/><path d="M5.9 8.3Q9 7.5 12.1 9.8" stroke="#fff" stroke-width="0.7" fill="none"/></g><circle cx="9" cy="9" r="8.6" fill="none" stroke="rgba(0,0,0,0.2)" stroke-width="0.8"/></svg>
+            Português</span>
+          <svg class="tick" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.5l2.3 2.3L9.5 3.5"/></svg>
+        </button>
+        <button class="menu-item" role="menuitemradio" data-lang="en">
+          <span class="menu-label">
+            <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><defs><clipPath id="clip-us"><circle cx="9" cy="9" r="9"/></clipPath></defs><g clip-path="url(#clip-us)"><rect width="18" height="18" fill="#fff"/><rect y="0" width="18" height="1.4" fill="#B22234"/><rect y="2.8" width="18" height="1.4" fill="#B22234"/><rect y="5.6" width="18" height="1.4" fill="#B22234"/><rect y="8.4" width="18" height="1.4" fill="#B22234"/><rect y="11.2" width="18" height="1.4" fill="#B22234"/><rect y="14" width="18" height="1.4" fill="#B22234"/><rect y="16.8" width="18" height="1.4" fill="#B22234"/><rect width="9.2" height="9.8" fill="#3C3B6E"/><circle cx="2.3" cy="2.4" r="0.55" fill="#fff"/><circle cx="4.6" cy="2.4" r="0.55" fill="#fff"/><circle cx="6.9" cy="2.4" r="0.55" fill="#fff"/><circle cx="3.4" cy="4.6" r="0.55" fill="#fff"/><circle cx="5.7" cy="4.6" r="0.55" fill="#fff"/><circle cx="2.3" cy="6.8" r="0.55" fill="#fff"/><circle cx="4.6" cy="6.8" r="0.55" fill="#fff"/><circle cx="6.9" cy="6.8" r="0.55" fill="#fff"/></g><circle cx="9" cy="9" r="8.6" fill="none" stroke="rgba(0,0,0,0.2)" stroke-width="0.8"/></svg>
+            English</span>
+          <svg class="tick" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.5l2.3 2.3L9.5 3.5"/></svg>
+        </button>
+        <button class="menu-item" role="menuitemradio" data-lang="es">
+          <span class="menu-label">
+            <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><defs><clipPath id="clip-es"><circle cx="9" cy="9" r="9"/></clipPath></defs><g clip-path="url(#clip-es)"><rect width="18" height="18" fill="#AA151B"/><rect y="4.5" width="18" height="9" fill="#F1BF00"/></g><circle cx="9" cy="9" r="8.6" fill="none" stroke="rgba(0,0,0,0.2)" stroke-width="0.8"/></svg>
+            Español</span>
+          <svg class="tick" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.5l2.3 2.3L9.5 3.5"/></svg>
+        </button>
+        <div class="menu-sep"></div>
+        <div class="menu-title" data-i18n="theme"></div>
+        <button class="menu-item" role="menuitemradio" data-theme="light">
+          <span class="menu-label" data-i18n="light"></span>
+          <svg class="tick" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.5l2.3 2.3L9.5 3.5"/></svg>
+        </button>
+        <button class="menu-item" role="menuitemradio" data-theme="dark">
+          <span class="menu-label" data-i18n="dark"></span>
+          <svg class="tick" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.5l2.3 2.3L9.5 3.5"/></svg>
+        </button>
+        <div class="menu-sep"></div>
+        <button class="menu-item" role="menuitem" data-action="settings">
+          <span class="menu-label" data-i18n="s.menu"></span>
+        </button>
+        <button class="menu-item" role="menuitem" data-action="terms">
+          <span class="menu-label" data-i18n="t.menu"></span>
+        </button>
+      </div>
+      <div id="pmenu" class="menu" role="menu" hidden></div>
+      <button id="gear" class="gear" data-i18n-aria="settings" data-i18n-title="settings" aria-haspopup="menu" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+      <button type="button" id="foot-text" class="foot-text" aria-haspopup="menu" aria-expanded="false" data-i18n-title="pf.menuTitle"></button>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- Configurações e permissões -->
+    <section data-screen="settings" hidden>
+      <header>
+        <h1 data-i18n="s.title"></h1>
+        <p class="lead" data-i18n="s.intro"></p>
+      </header>
+
+      <div class="card settings">
+        <label class="setting">
+          <input type="checkbox" class="switch" id="set-profiles">
+          <span class="setting-body"><b data-i18n="s.profiles"></b><span class="hint" data-i18n="s.profilesDesc"></span></span>
+        </label>
+        <label class="setting">
+          <input type="checkbox" class="switch" id="set-docker">
+          <span class="setting-body"><b data-i18n="s.docker"></b><span class="hint" data-i18n="s.dockerDesc"></span><span class="hint strong" id="set-docker-state"></span></span>
+        </label>
+        <label class="setting">
+          <input type="checkbox" class="switch" id="set-scan">
+          <span class="setting-body"><b data-i18n="s.scan"></b><span class="hint" data-i18n="s.scanDesc"></span><span class="hint strong" id="set-scan-state"></span></span>
+        </label>
+        <label class="setting">
+          <input type="checkbox" class="switch" id="set-unmanaged">
+          <span class="setting-body"><b data-i18n="s.unmanaged"></b><span class="hint" data-i18n="s.unmanagedDesc"></span><span class="hint strong" id="set-unmanaged-state"></span></span>
+        </label>
+      </div>
+
+      <footer class="actions">
+        <button class="btn" id="set-terms" data-i18n="t.menu"></button>
+        <button class="btn primary" id="set-back" data-i18n="d.back"></button>
+      </footer>
+    </section>
+
+    <!-- 0. Termos de uso -->
+    <section data-screen="terms" hidden>
+      <header>
+        <h1 data-i18n="t.title"></h1>
+        <p class="lead" data-i18n="t.intro"></p>
+      </header>
+
+      <div id="terms-text" class="card terms" tabindex="0"></div>
+
+      <div class="stack">
+        <label class="check"><input type="checkbox" id="terms-accept"><span data-i18n="t.accept"></span></label>
+        <label class="check"><input type="checkbox" id="terms-profiles" checked><span data-i18n="t.profiles"></span></label>
+      </div>
+
+      <footer class="actions">
+        <button class="btn" id="terms-back" data-i18n="d.back" hidden></button>
+        <button class="btn primary" id="terms-go" disabled></button>
+      </footer>
+    </section>
+
+    <!-- 1. Conectar -->
+    <section data-screen="connect" hidden>
+      <header>
+        <h1 data-i18n="c.title"></h1>
+        <p class="lead" data-i18n="c.intro"></p>
+      </header>
+
+      <div id="connected-note" class="banner" hidden></div>
+
+      <div class="card steps-card">
+        <div class="row">
+          <span class="num">1</span>
+          <span class="grow" data-i18n="c.step1"></span>
+          <button class="btn small" id="copy-policy"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span data-i18n="c.step1Btn"></span></button>
+          <button class="btn small ghost" id="copy-policy-ec2"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span data-i18n="c.step1Ec2"></span></button>
+        </div>
+        <div class="row">
+          <span class="num">2</span>
+          <span class="grow" data-i18n="c.step2"></span>
+          <button class="btn small" id="open-iam" data-i18n-title="ext"><span data-i18n="c.step2Btn"></span><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg></button>
+        </div>
+        <div class="row">
+          <span class="num">3</span>
+          <span class="grow" data-i18n="c.step3"></span>
+        </div>
+      </div>
+
+      <div class="fields two">
+        <label class="field"><span data-i18n="c.keyId"></span>
+          <input id="key-id" type="text" class="mono" autocomplete="off" spellcheck="false" placeholder="AKIA…">
+        </label>
+        <label class="field"><span data-i18n="c.secret"></span>
+          <input id="secret" type="password" class="mono" autocomplete="off" spellcheck="false">
+        </label>
+      </div>
+      <p class="hint" data-i18n="c.note"></p>
+      <p id="connect-error" class="error" role="alert" hidden></p>
+
+      <p class="hint" data-i18n="c.profilesHint"></p>
+
+      <footer class="actions">
+        <button class="btn primary" id="connect-go" data-i18n="c.go"></button>
+      </footer>
+    </section>
+
+    <!-- 2. Projeto -->
+    <section data-screen="project" hidden>
+      <header>
+        <h1 data-i18n="p.title"></h1>
+        <p class="lead" data-i18n="p.intro"></p>
+      </header>
+
+      <div class="stack">
+        <div class="label-strong" data-i18n="p.source"></div>
+        <div class="cards three" role="radiogroup" aria-label="Origem">
+          <button class="choice selected" role="radio" aria-checked="true" data-source="folder">
+            <span class="choice-head"><b data-i18n="p.srcFolder"></b></span>
+            <span class="choice-desc" data-i18n="p.srcFolderDesc"></span>
+          </button>
+          <button class="choice" role="radio" aria-checked="false" data-source="docker">
+            <span class="choice-head"><b data-i18n="p.srcDocker"></b></span>
+            <span class="choice-desc" data-i18n="p.srcDockerDesc"></span>
+          </button>
+          <button class="choice" role="radio" aria-checked="false" data-source="archive">
+            <span class="choice-head"><b data-i18n="p.srcArchive"></b></span>
+            <span class="choice-desc" data-i18n="p.srcArchiveDesc"></span>
+          </button>
+        </div>
+      </div>
+
+      <div class="stack">
+        <div id="src-folder" class="inline-row">
+          <div id="dir-box" class="path-box mono" data-i18n="p.noFolder"></div>
+          <button class="btn" id="pick-dir" data-i18n="p.pick"></button>
+        </div>
+        <div id="src-archive" class="inline-row" hidden>
+          <div id="archive-box" class="path-box mono" data-i18n="p.noArchive"></div>
+          <button class="btn" id="pick-archive" data-i18n="p.pickArchive"></button>
+        </div>
+        <p id="archive-hint" class="hint" hidden data-i18n="p.archiveHint"></p>
+
+        <div id="dk-panel" class="stack" hidden>
+          <div id="dk-off" class="banner info" hidden>
+            <span id="dk-off-text" class="grow"></span>
+            <button class="btn small" id="dk-allow" data-i18n="p.dockerAllow"></button>
+            <button class="btn small ghost" id="dk-settings" data-i18n="p.dockerSettings"></button>
+          </div>
+          <div id="dk-body" class="stack" hidden>
+            <div class="apps-head">
+              <div class="label-strong" data-i18n="p.dockerFound"></div>
+              <button class="btn small" id="dk-refresh"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg><span data-i18n="a.refresh"></span></button>
+            </div>
+            <p id="dk-msg" class="empty" hidden></p>
+            <div id="dk-list" class="dk-list" role="radiogroup" aria-label="Imagens"></div>
+            <label class="check"><input type="checkbox" id="dk-all"><span data-i18n="p.dockerAll"></span></label>
+          </div>
+        </div>
+
+        <div id="detect" class="banner" hidden></div>
+        <label class="check"><input type="checkbox" id="dk-scan"><span data-i18n="p.scan"></span></label>
+        <p id="dk-scan-hint" class="hint" hidden></p>
+        <div id="docker-warn" class="banner warn" hidden></div>
+        <div id="live-banner" class="banner info" hidden>
+          <span id="live-banner-text" class="grow"></span>
+          <button class="btn small" id="live-banner-go" data-i18n="p.view"></button>
+        </div>
+      </div>
+
+      <div class="stack">
+        <div class="label-strong" data-i18n="p.where"></div>
+        <div class="cards two" role="radiogroup" aria-label="Destino">
+          <button class="choice selected" role="radio" aria-checked="true" data-target="lightsail">
+            <span class="choice-head"><b>Lightsail</b><span class="pill" data-i18n="p.rec"></span></span>
+            <span class="choice-desc" data-i18n="p.lsDesc"></span>
+          </button>
+          <button class="choice" role="radio" aria-checked="false" data-target="ec2">
+            <span class="choice-head"><b>EC2</b></span>
+            <span class="choice-desc" data-i18n="p.ec2Desc"></span>
+          </button>
+        </div>
+      </div>
+
+      <div class="fields three">
+        <label class="field"><span data-i18n="p.appName"></span>
+          <input id="app-name" type="text" autocomplete="off" spellcheck="false" maxlength="40">
+        </label>
+        <label class="field"><span data-i18n="p.region"></span>
+          <select id="region"></select>
+        </label>
+        <label class="field"><span data-i18n="p.size"></span>
+          <select id="size"></select>
+        </label>
+        <label class="field narrow"><span data-i18n="p.port"></span>
+          <input id="app-port" type="number" min="1" max="65535" inputmode="numeric">
+        </label>
+      </div>
+      <div id="update-note" class="banner warn" hidden></div>
+      <p id="project-error" class="error" role="alert" hidden></p>
+
+      <footer class="actions">
+        <span class="grow"></span>
+        <button class="btn primary" id="publish" data-i18n="p.publish" disabled></button>
+      </footer>
+    </section>
+
+    <!-- 3. Deploy -->
+    <section data-screen="deploy" hidden>
+      <header>
+        <h1 id="deploy-title"></h1>
+        <p class="lead" id="deploy-intro"></p>
+      </header>
+
+      <ol id="tasks" class="card tasks"></ol>
+
+      <div id="deploy-error" class="banner danger" role="alert" hidden></div>
+
+      <div class="logbox" id="logbox">
+        <div class="logbar"><span class="grow"><span data-i18n="d.details"></span><span id="log-timer" class="log-timer mono" aria-label="Tempo decorrido"></span></span><button class="link" id="copy-log"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span data-i18n="d.copyLog"></span></button></div>
+        <pre id="log" class="log mono" tabindex="0"></pre>
+      </div>
+
+      <footer class="actions end" id="deploy-actions">
+        <button class="btn" id="deploy-cancel" data-i18n="d.cancel"></button>
+        <button class="btn" id="deploy-back" data-i18n="d.back" hidden></button>
+        <button class="btn primary" id="deploy-retry" data-i18n="d.retry" hidden></button>
+      </footer>
+    </section>
+
+    <!-- 4. No ar -->
+    <section data-screen="live" hidden>
+      <div id="live-current" class="group">
+      <header class="live-head">
+        <span class="dot live-dot"></span>
+        <h1 id="live-title"></h1>
+      </header>
+
+      <div class="card urlbar">
+        <span id="live-url" class="grow mono"></span>
+        <button class="btn small" id="copy-url"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span data-i18n="l.copy"></span></button>
+        <button class="btn small primary" id="open-url" data-i18n-title="ext"><span data-i18n="l.open"></span><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg></button>
+      </div>
+
+      <div class="cards two">
+        <div class="card stat"><div class="stat-label" data-i18n="l.dest"></div><div class="stat-value" id="st-dest"></div><div class="stat-sub" id="st-region"></div></div>
+        <div class="card stat"><div class="stat-label" data-i18n="l.version"></div><div class="stat-value" id="st-version"></div><div class="stat-sub"></div></div>
+      </div>
+
+      <div class="inline-row">
+        <button class="btn primary" id="new-version" data-i18n="l.newVersion"></button>
+        <button class="btn" id="tech-details" data-i18n="l.techDetails"></button>
+        <button class="btn ghost" id="other-project" data-i18n="l.otherProject"></button>
+      </div>
+
+      <div class="danger-zone">
+        <div class="grow">
+          <div class="danger-title" data-i18n="l.removeTitle"></div>
+          <div class="danger-desc" data-i18n="l.removeDesc"></div>
+        </div>
+        <button class="btn danger-btn" id="remove" data-i18n="l.removeBtn"></button>
+      </div>
+      </div>
+
+      <div id="apps" class="group">
+        <div class="apps-head">
+          <h1 id="apps-title" class="grow"></h1>
+          <div class="apps-controls">
+            <label class="inline-label"><span data-i18n="a.region"></span>
+              <select id="apps-region"></select>
+            </label>
+            <button class="btn small" id="apps-refresh"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg><span data-i18n="a.refresh"></span></button>
+          </div>
+        </div>
+        <div id="apps-warn" class="banner warn" hidden>
+          <div class="warn-main">
+            <span id="apps-warn-text" class="grow"></span>
+            <button type="button" class="link" id="apps-warn-toggle" aria-expanded="false" aria-controls="apps-warn-detail"></button>
+          </div>
+          <pre id="apps-warn-detail" class="warn-detail mono" hidden></pre>
+        </div>
+        <p id="apps-error" class="error" role="alert" hidden></p>
+        <div id="apps-list" class="apps-list"></div>
+        <p id="apps-status" class="empty" hidden></p>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div id="tip" class="tip" role="status" aria-live="polite" hidden></div>
+
+<div id="modal" class="modal-backdrop" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <h2 id="modal-title"></h2>
+    <p id="modal-text"></p>
+    <div class="actions end">
+      <button class="btn" id="modal-no"></button>
+      <button class="btn danger-btn" id="modal-yes"></button>
+    </div>
+  </div>
+</div>
+
+<script src="i18n.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+# Build
+/target
+
+# Segredos e credenciais (nunca versionar)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials
+.aws/
+
+# Arquivos temporários do skyship (gravação atômica do ~/.aws/credentials)
+*.skyship-tmp
+
+# GUI (Tauri): arquivos gerados a cada build
+crates/gui/gen/
+node_modules/
+crates/gui/dist/
+
+# Editores e sistema
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Configuração local do Claude Code
+.claude/settings.local.json

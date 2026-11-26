@@ -1,0 +1,13 @@
+[workspace]
+members = ["crates/core", "crates/cli", "crates/gui"]
+# crates/gui ainda está incompleto: fora do `cargo build` e `cargo test` padrão
+default-members = ["crates/core", "crates/cli"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[profile.dev]
+debug = 0
