@@ -52,10 +52,22 @@ Também existe um app de desktop, em português, inglês e espanhol, com tema cl
 os apps da sua conta, publica novos, atualiza os existentes e os remove. Pode sugerir o que publicar
 a partir do seu Docker local e, se você ligar, verificar a imagem com o [Trivy](https://trivy.dev)
 (rodando como um container do Docker) em busca de segredos e vulnerabilidades graves antes de
-publicar. O que ele pode fazer no seu computador é escolhido nas Configurações. Ele não faz parte do
-build padrão: rode
-`cargo build -p skyship-gui` e depois `./target/debug/skyship-gui` (mais detalhes em
-[docs/development.md](docs/development.md), em inglês).
+publicar. O que ele pode fazer no seu computador é escolhido nas Configurações.
+
+### Instalando os programas
+
+Não há nada para instalar além dos próprios programas: compile-os e execute-os de onde estão, ou
+copie para onde quiser.
+
+- **Linha de comando:** `cargo build --release` deixa o `skyship` (`skyship.exe`) em `target/release/`.
+  `cargo install --path crates/cli` o coloca na pasta `bin` do Cargo.
+- **App de desktop:** não faz parte do build padrão. Antes de compilar, instale o que ele precisa: no
+  Linux as bibliotecas de desenvolvimento do WebKitGTK 4.1 (`webkit2gtk-4.1` no Arch,
+  `libwebkit2gtk-4.1-dev` no Debian e no Ubuntu; veja os
+  [pré-requisitos do Tauri](https://v2.tauri.app/start/prerequisites/)), no Windows as Visual Studio
+  Build Tools. Depois `cargo build --release -p skyship-gui` e execute `target/release/skyship-gui`
+  (mais detalhes em [docs/development.md](docs/development.md), em inglês).
+- Para remover tudo, veja [Desinstalar](#desinstalar).
 
 ### Dando acesso à sua conta
 
@@ -73,6 +85,24 @@ que o skyship precisa. O passo a passo está em [docs/permissions.pt-BR.md](docs
 | `deploy` no Lightsail | Funciona, inclusive atualizar um app que já existe. Testado pelo app de desktop numa conta real (contas novas podem ter limite zero de container services; talvez seja preciso pedir aumento à AWS). |
 | `deploy` na EC2 | Funciona, inclusive atualizar um app. Testado pelo app de desktop numa conta real. O endereço é `http://` puro: o destino EC2 não tem HTTPS. |
 | App de desktop | Funciona numa conta real da AWS: publicar, atualizar e remover apps no Lightsail e na EC2, a lista de apps e a tag do skyship, a verificação com o Trivy e publicar a partir de uma pasta de projeto, de uma imagem local ou de um arquivo compactado. |
+
+## Desinstalar
+
+1. **Remova os seus apps primeiro.** Desinstalar o skyship **não** remove o que ele publicou: um app
+   continua rodando (e cobrando) até você removê-lo. Use **Remover** no app de desktop (Apps), ou
+   `skyship destroy --yes` na pasta do app. Ao remover um app, o skyship também apaga o que criou para
+   ele (na EC2: o security group, o repositório do ECR com as imagens, e a role e o profile do IAM).
+2. **Remova o programa.** Ele foi compilado do código-fonte, então apague a pasta que você clonou (os
+   programas ficam na pasta `target/`). Se você rodou `cargo install --path crates/cli`, rode
+   `cargo uninstall skyship`.
+3. **Remova o que o skyship salvou no seu computador.** Ele não salva nada em outro lugar.
+
+   | O quê | Onde | Observações |
+   |---|---|---|
+   | Chaves de acesso da AWS (o perfil `skyship`, se você usou `skyship login` ou o app) | `~/.aws/credentials` (Windows: `%USERPROFILE%\.aws\credentials`) | Apague o bloco `[skyship]`. **Apague também a chave de acesso na AWS** (IAM → Users → seu usuário → Security credentials): remover o arquivo não a cancela. |
+   | As configurações do app de desktop, os termos aceitos e a configuração dos apps publicados a partir de uma imagem local | Linux: `~/.config/dev.skyship.gui` e `~/.local/share/dev.skyship.gui`. Windows: `%APPDATA%\dev.skyship.gui` e `%LOCALAPPDATA%\dev.skyship.gui` | Apague as pastas. |
+   | Arquivos compactados que você abriu no app | `skyship-archive-*` na pasta temporária | Removidos na próxima abertura; pode apagar. |
+   | Restos no Docker | As imagens locais `skyship-build/*` (uma por deploy no Lightsail) e, se você usou a verificação com o Trivy, a imagem `aquasec/trivy:0.58.0` e o volume `skyship-trivy-cache` | `docker image rm $(docker image ls 'skyship-build/*' -q)` e `docker volume rm skyship-trivy-cache` |
 
 ## Perguntas
 
@@ -96,8 +126,8 @@ container service. Apague um que você não usa, ou peça à AWS para aumentar o
 ou um chamado de suporte). É um limite da conta, não do skyship.
 
 **Vou ser cobrado depois que testar?** Sim, enquanto o app existir. O `skyship destroy --yes`
-(ou Remover no app de desktop) remove o serviço do Lightsail. Na EC2 ele encerra a instância, mas a função de permissões e a regra
-de rede que ele criou ficam para trás (elas não custam nada).
+(ou Remover no app de desktop) remove o serviço do Lightsail. Na EC2 ele encerra a instância e apaga também o que o skyship criou
+para ela (o security group, o repositório do ECR com as imagens, e a role e o profile do IAM).
 
 **Funciona no Windows ou no macOS?** No Windows, sim: foi compilado e testado no Windows 11 com o
 Docker Desktop (backend WSL 2, modo Linux containers), e um site foi publicado no Lightsail pelo app

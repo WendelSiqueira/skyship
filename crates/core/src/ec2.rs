@@ -5,6 +5,7 @@ use crate::{
     progress::{Progress, Stage},
 };
 use anyhow::{Context, Result, bail};
+use aws_sdk_ec2::error::{DisplayErrorContext, ProvideErrorMetadata};
 use aws_sdk_ec2::types::{
     Filter, IamInstanceProfileSpecification, InstanceStateName, ResourceType, Tag, TagSpecification,
 };
@@ -13,6 +14,12 @@ use tokio::time::sleep;
 
 const TRUST: &str = r#"{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}"#;
 const USER_DATA: &str = "#!/bin/bash\ndnf install -y docker\nsystemctl enable --now docker\n";
+
+/// As duas políticas gerenciadas da AWS que a role da instância leva (e só elas).
+const MANAGED_POLICIES: [&str; 2] = [
+    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+    "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+];
 
 fn res_name(cfg: &Config) -> String {
     format!("skyship-{}", cfg.name)
@@ -56,10 +63,7 @@ async fn ensure_role(sdk: &aws_config::SdkConfig, cfg: &Config, p: &Progress) ->
             .assume_role_policy_document(TRUST)
             .send()
             .await?;
-        for policy in [
-            "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
-            "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
-        ] {
+        for policy in MANAGED_POLICIES {
             iam.attach_role_policy()
                 .role_name(&name)
                 .policy_arn(policy)
@@ -475,25 +479,323 @@ fn ids_of_instances(out: &aws_sdk_ec2::operation::describe_instances::DescribeIn
         .collect()
 }
 
+/// Remove o app: encerra a instância e apaga o que o skyship criou para ele (security group, repositório do
+/// ECR, role e instance profile do IAM). A limpeza é "melhor esforço": se algo não puder ser apagado, o log diz
+/// o quê e o resto segue. Também serve para limpar o que sobrou de uma remoção anterior (sem instância).
 pub async fn destroy(sdk: &aws_config::SdkConfig, cfg: &Config, p: &Progress) -> Result<()> {
     let ec2 = aws_sdk_ec2::Client::new(sdk);
     let ids: Vec<String> = find_instances(&ec2, cfg).await?.into_iter().map(|i| i.0).collect();
+    let mut instance_gone = true;
     if ids.is_empty() {
         p.log("nenhuma instância para remover");
-        return Ok(());
+    } else {
+        p.log(format!("terminando {}", ids.join(", ")));
+        ec2.terminate_instances()
+            .set_instance_ids(Some(ids.clone()))
+            .send()
+            .await?;
+        if let Err(e) = wait_terminated(&ec2, &ids).await {
+            p.log(format!("{e:#}"));
+            instance_gone = false;
+        }
     }
-    p.log(format!("terminando {}", ids.join(", ")));
-    ec2.terminate_instances().set_instance_ids(Some(ids)).send().await?;
-    p.log(format!(
-        "role IAM e security group `{}` foram mantidos; remova à mão se quiser",
-        res_name(cfg)
-    ));
+    delete_security_group(&ec2, cfg, p).await;
+    delete_ecr_repository(sdk, cfg, p).await;
+    if instance_gone {
+        delete_role_and_profile(sdk, cfg, p).await;
+    } else {
+        // o IAM não impede apagar a role de uma instância que ainda roda: só depois que ela terminar
+        p.log(format!(
+            "a instância ainda não terminou; a role {} foi mantida (remova o app de novo mais tarde)",
+            res_name(cfg)
+        ));
+    }
     Ok(())
+}
+
+/// Espera as instâncias chegarem a `terminated`: o security group só pode ser apagado depois.
+async fn wait_terminated(ec2: &aws_sdk_ec2::Client, ids: &[String]) -> Result<()> {
+    for _ in 0..120 {
+        let out = ec2
+            .describe_instances()
+            .set_instance_ids(Some(ids.to_vec()))
+            .send()
+            .await?;
+        let all_gone = out
+            .reservations()
+            .iter()
+            .flat_map(|r| r.instances())
+            .all(|i| i.state().and_then(|s| s.name()) == Some(&InstanceStateName::Terminated));
+        if all_gone {
+            return Ok(());
+        }
+        sleep(Duration::from_secs(3)).await;
+    }
+    bail!("a instância não terminou de encerrar em 6 minutos; o que depende dela pode não ser apagado agora")
+}
+
+async fn delete_security_group(ec2: &aws_sdk_ec2::Client, cfg: &Config, p: &Progress) {
+    let name = res_name(cfg);
+    let Ok(found) = ec2
+        .describe_security_groups()
+        .filters(Filter::builder().name("group-name").values(&name).build())
+        .send()
+        .await
+    else {
+        p.log(format!("não consegui procurar o security group {name}; mantido"));
+        return;
+    };
+    let Some(group) = found.security_groups().first() else {
+        return;
+    };
+    // só apaga o que o skyship criou: a descrição é a que ensure_sg grava
+    if group.description() != Some(format!("skyship {}", cfg.name).as_str()) {
+        p.log(format!(
+            "o security group {name} não foi criado pelo skyship (descrição diferente); mantido"
+        ));
+        return;
+    }
+    let Some(id) = group.group_id() else { return };
+    // logo depois de encerrar a instância a AWS ainda pode dizer que o grupo está em uso
+    for _ in 0..24 {
+        match ec2.delete_security_group().group_id(id).send().await {
+            Ok(_) => {
+                p.log(format!("security group {name} removido"));
+                return;
+            }
+            Err(e) if e.code() == Some("DependencyViolation") => sleep(Duration::from_secs(5)).await,
+            Err(e) => {
+                p.log(format!(
+                    "não consegui remover o security group {name}: {}",
+                    DisplayErrorContext(&e)
+                ));
+                return;
+            }
+        }
+    }
+    p.log(format!("o security group {name} continua em uso; remova à mão depois"));
+}
+
+async fn delete_ecr_repository(sdk: &aws_config::SdkConfig, cfg: &Config, p: &Progress) {
+    let ecr = aws_sdk_ecr::Client::new(sdk);
+    let repo = format!("skyship/{}", cfg.name);
+    match ecr.delete_repository().repository_name(&repo).force(true).send().await {
+        Ok(_) => p.log(format!("repositório ECR {repo} removido, com as imagens")),
+        Err(e) if e.code() == Some("RepositoryNotFoundException") => {}
+        Err(e) => p.log(format!(
+            "não consegui remover o repositório ECR {repo}: {}",
+            aws_sdk_ecr::error::DisplayErrorContext(&e)
+        )),
+    }
+}
+
+/// Desfaz a codificação de URL do documento de política que o IAM devolve (`%7B%22Version%22...`).
+fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%'
+            && i + 2 < b.len()
+            && let Ok(v) = u8::from_str_radix(&s[i + 1..i + 3], 16)
+        {
+            out.push(v);
+            i += 3;
+        } else {
+            out.push(if b[i] == b'+' { b' ' } else { b[i] });
+            i += 1;
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// Dois documentos JSON são iguais, ignorando espaços e a ordem das chaves?
+fn same_json(a: &str, b: &str) -> bool {
+    match (
+        serde_json::from_str::<serde_json::Value>(a),
+        serde_json::from_str::<serde_json::Value>(b),
+    ) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    }
+}
+
+/// Resultado da conferência das outras regiões.
+enum OtherRegions {
+    /// Nenhuma instância do app em outra região.
+    Free,
+    /// Existe uma instância do app nesta região.
+    InUse(String),
+    /// Não foi possível conferir estas regiões (erro de rede, de permissão, limite de requisições...). Na
+    /// dúvida, a role não é apagada: o IAM não impede apagar uma role que uma instância em execução usa.
+    Unchecked(Vec<String>),
+}
+
+enum Probe {
+    Used,
+    Free,
+    Unknown,
+}
+
+/// Uma região recusa a consulta com estes códigos quando a conta não a habilitou (regiões opcionais), e nela
+/// não pode haver instâncias. Qualquer outro erro, ou nenhum código (falha de rede), é "não sei".
+fn region_is_simply_disabled(code: Option<&str>) -> bool {
+    matches!(code, Some("AuthFailure" | "OptInRequired"))
+}
+
+/// Alguma instância deste app existe em outra região? A role do IAM é global (vale para todas as regiões).
+async fn other_regions(sdk: &aws_config::SdkConfig, cfg: &Config) -> OtherRegions {
+    let here = sdk.region().map(|r| r.to_string()).unwrap_or_default();
+    let mut set = tokio::task::JoinSet::new();
+    for r in crate::regions::REGIONS.iter().filter(|r| r.code != here) {
+        let conf = sdk
+            .clone()
+            .into_builder()
+            .region(aws_config::Region::new(r.code))
+            .build();
+        let name = cfg.name.clone();
+        set.spawn(async move {
+            let ec2 = aws_sdk_ec2::Client::new(&conf);
+            let probe = match ec2
+                .describe_instances()
+                .filters(Filter::builder().name("tag:skyship:name").values(&name).build())
+                .filters(
+                    Filter::builder()
+                        .name("instance-state-name")
+                        .values("pending")
+                        .values("running")
+                        .values("stopping")
+                        .values("stopped")
+                        .build(),
+                )
+                .send()
+                .await
+            {
+                Ok(out) if out.reservations().iter().any(|x| !x.instances().is_empty()) => Probe::Used,
+                Ok(_) => Probe::Free,
+                Err(e) if region_is_simply_disabled(e.code()) => Probe::Free,
+                Err(_) => Probe::Unknown,
+            };
+            (r.code, probe)
+        });
+    }
+    let mut unchecked = vec![];
+    while let Some(res) = set.join_next().await {
+        match res {
+            Ok((region, Probe::Used)) => {
+                set.abort_all();
+                return OtherRegions::InUse(region.to_string());
+            }
+            Ok((region, Probe::Unknown)) => unchecked.push(region.to_string()),
+            Ok((_, Probe::Free)) => {}
+            Err(_) => unchecked.push("?".to_string()), // a consulta nem terminou: não sei
+        }
+    }
+    if unchecked.is_empty() {
+        OtherRegions::Free
+    } else {
+        unchecked.sort();
+        OtherRegions::Unchecked(unchecked)
+    }
+}
+
+/// Apaga a role e o instance profile `skyship-<nome>`, se forem do skyship: mesma política de confiança, só
+/// as duas políticas gerenciadas, e nenhuma instância do app em outra região (a role é global).
+async fn delete_role_and_profile(sdk: &aws_config::SdkConfig, cfg: &Config, p: &Progress) {
+    let iam = aws_sdk_iam::Client::new(sdk);
+    let name = res_name(cfg);
+    let Ok(role) = iam.get_role().role_name(&name).send().await else {
+        return; // não existe (ou sem permissão para ler): nada a apagar
+    };
+    let trust = percent_decode(
+        role.role()
+            .and_then(|r| r.assume_role_policy_document())
+            .unwrap_or_default(),
+    );
+    if !same_json(&trust, TRUST) {
+        p.log(format!(
+            "a role {name} não foi criada pelo skyship (política de confiança diferente); mantida"
+        ));
+        return;
+    }
+    let attached = match iam.list_attached_role_policies().role_name(&name).send().await {
+        Ok(o) => o
+            .attached_policies()
+            .iter()
+            .filter_map(|a| a.policy_arn().map(String::from))
+            .collect::<Vec<_>>(),
+        Err(e) => {
+            p.log(format!(
+                "não consegui ler as políticas da role {name}; mantida: {}",
+                aws_sdk_iam::error::DisplayErrorContext(&e)
+            ));
+            return;
+        }
+    };
+    if attached.iter().any(|a| !MANAGED_POLICIES.contains(&a.as_str())) {
+        p.log(format!(
+            "a role {name} tem outras políticas além das do skyship; mantida"
+        ));
+        return;
+    }
+    match other_regions(sdk, cfg).await {
+        OtherRegions::Free => {}
+        OtherRegions::InUse(region) => {
+            p.log(format!(
+                "a role {name} também é usada por uma instância em {region}; mantida"
+            ));
+            return;
+        }
+        OtherRegions::Unchecked(regions) => {
+            p.log(format!(
+                "não consegui conferir se o app também roda em {}; a role {name} foi mantida por segurança (tente de novo, ou remova à mão)",
+                regions.join(", ")
+            ));
+            return;
+        }
+    }
+    // o profile primeiro: ele guarda a role
+    if iam
+        .get_instance_profile()
+        .instance_profile_name(&name)
+        .send()
+        .await
+        .is_ok()
+    {
+        let _ = iam
+            .remove_role_from_instance_profile()
+            .instance_profile_name(&name)
+            .role_name(&name)
+            .send()
+            .await;
+        match iam.delete_instance_profile().instance_profile_name(&name).send().await {
+            Ok(_) => p.log(format!("instance profile {name} removido")),
+            Err(e) => p.log(format!(
+                "não consegui remover o instance profile {name}: {}",
+                aws_sdk_iam::error::DisplayErrorContext(&e)
+            )),
+        }
+    }
+    for policy in &attached {
+        let _ = iam
+            .detach_role_policy()
+            .role_name(&name)
+            .policy_arn(policy)
+            .send()
+            .await;
+    }
+    match iam.delete_role().role_name(&name).send().await {
+        Ok(_) => p.log(format!("role IAM {name} removida")),
+        Err(e) => p.log(format!(
+            "não consegui remover a role {name}: {}",
+            aws_sdk_iam::error::DisplayErrorContext(&e)
+        )),
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{http_responds, summarize_checks};
+    use super::{TRUST, http_responds, percent_decode, region_is_simply_disabled, same_json, summarize_checks};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     #[test]
@@ -505,6 +807,41 @@ mod tests {
         assert_eq!(summarize_checks("initializing", "impaired"), "impaired");
         assert_eq!(summarize_checks("", ""), "insufficient-data");
         assert_eq!(summarize_checks("not-applicable", "ok"), "insufficient-data");
+    }
+
+    #[test]
+    fn decodes_the_policy_document_the_way_iam_returns_it() {
+        let encoded = "%7B%22Version%22%3A%222012-10-17%22%2C%22Statement%22%3A%5B%7B%22Effect%22%3A%22Allow%22%2C%22Principal%22%3A%7B%22Service%22%3A%22ec2.amazonaws.com%22%7D%2C%22Action%22%3A%22sts%3AAssumeRole%22%7D%5D%7D";
+        assert!(
+            same_json(&percent_decode(encoded), TRUST),
+            "a role criada pelo skyship precisa ser reconhecida"
+        );
+        assert_eq!(percent_decode("a%2Fb+c%"), "a/b c%");
+        assert_eq!(percent_decode("100%"), "100%");
+    }
+
+    #[test]
+    fn only_the_exact_trust_policy_counts_as_skyships() {
+        // outra entidade pode assumir a role: não é a do skyship
+        let other = TRUST.replace("ec2.amazonaws.com", "lambda.amazonaws.com");
+        assert!(!same_json(&other, TRUST));
+        assert!(!same_json("não é json", TRUST));
+        // espaços e a ordem das chaves não importam
+        let reordered = r#"{ "Statement": [ { "Action": "sts:AssumeRole", "Principal": { "Service": "ec2.amazonaws.com" }, "Effect": "Allow" } ], "Version": "2012-10-17" }"#;
+        assert!(same_json(reordered, TRUST));
+    }
+
+    #[test]
+    fn only_a_disabled_region_counts_as_having_no_instances() {
+        // região opcional não habilitada: a conta não pode ter instâncias lá
+        assert!(region_is_simply_disabled(Some("AuthFailure")));
+        assert!(region_is_simply_disabled(Some("OptInRequired")));
+        // qualquer outra falha, ou nenhuma resposta (rede), é "não sei": a role deve ficar
+        assert!(!region_is_simply_disabled(None));
+        assert!(!region_is_simply_disabled(Some("UnauthorizedOperation")));
+        assert!(!region_is_simply_disabled(Some("RequestLimitExceeded")));
+        assert!(!region_is_simply_disabled(Some("InternalError")));
+        assert!(!region_is_simply_disabled(Some("")));
     }
 
     fn rt() -> tokio::runtime::Runtime {

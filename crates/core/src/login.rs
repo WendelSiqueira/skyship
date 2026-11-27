@@ -41,7 +41,7 @@ const POLICY_EC2: &str = r#"{
       "Sid": "EcrSkyshipRepositories",
       "Effect": "Allow",
       "Action": [
-        "ecr:DescribeRepositories", "ecr:CreateRepository", "ecr:PutLifecyclePolicy", "ecr:BatchCheckLayerAvailability",
+        "ecr:DescribeRepositories", "ecr:CreateRepository", "ecr:DeleteRepository", "ecr:PutLifecyclePolicy", "ecr:BatchCheckLayerAvailability",
         "ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage"
       ],
       "Resource": "arn:aws:ecr:*:*:repository/skyship/*"
@@ -50,7 +50,7 @@ const POLICY_EC2: &str = r#"{
       "Sid": "Ec2ReadAndCreate",
       "Effect": "Allow",
       "Action": [
-        "ec2:DescribeInstances", "ec2:DescribeInstanceStatus", "ec2:DescribeSecurityGroups", "ec2:RunInstances",
+        "ec2:DescribeInstances", "ec2:DescribeInstanceStatus", "ec2:DescribeSecurityGroups", "ec2:DeleteSecurityGroup", "ec2:RunInstances",
         "ec2:CreateSecurityGroup", "ec2:AuthorizeSecurityGroupIngress"
       ],
       "Resource": "*"
@@ -73,15 +73,16 @@ const POLICY_EC2: &str = r#"{
       "Sid": "IamSkyshipRoleAndProfile",
       "Effect": "Allow",
       "Action": [
-        "iam:GetRole", "iam:CreateRole", "iam:GetInstanceProfile",
-        "iam:CreateInstanceProfile", "iam:AddRoleToInstanceProfile"
+        "iam:GetRole", "iam:CreateRole", "iam:GetInstanceProfile", "iam:ListAttachedRolePolicies",
+        "iam:CreateInstanceProfile", "iam:AddRoleToInstanceProfile",
+        "iam:RemoveRoleFromInstanceProfile", "iam:DeleteInstanceProfile", "iam:DeleteRole"
       ],
       "Resource": ["arn:aws:iam::*:role/skyship-*", "arn:aws:iam::*:instance-profile/skyship-*"]
     },
     {
       "Sid": "IamAttachOnlyTheTwoManagedPolicies",
       "Effect": "Allow",
-      "Action": "iam:AttachRolePolicy",
+      "Action": ["iam:AttachRolePolicy", "iam:DetachRolePolicy"],
       "Resource": "arn:aws:iam::*:role/skyship-*",
       "Condition": {
         "ArnEquals": {
@@ -385,6 +386,7 @@ mod tests {
             "ecr:PutLifecyclePolicy",
             "ecr:CreateRepository",
             "ecr:PutImage",
+            "ecr:DeleteRepository",
             "ec2:DescribeInstances",
             "ec2:DescribeInstanceStatus",
             "ec2:RunInstances",
@@ -394,12 +396,18 @@ mod tests {
             "ec2:DescribeSecurityGroups",
             "ec2:CreateSecurityGroup",
             "ec2:AuthorizeSecurityGroupIngress",
+            "ec2:DeleteSecurityGroup",
             "iam:GetRole",
             "iam:CreateRole",
             "iam:AttachRolePolicy",
             "iam:GetInstanceProfile",
             "iam:CreateInstanceProfile",
             "iam:AddRoleToInstanceProfile",
+            "iam:ListAttachedRolePolicies",
+            "iam:RemoveRoleFromInstanceProfile",
+            "iam:DeleteInstanceProfile",
+            "iam:DetachRolePolicy",
+            "iam:DeleteRole",
             "iam:PassRole",
             "ssm:GetParameter",
             "ssm:DescribeInstanceInformation",
