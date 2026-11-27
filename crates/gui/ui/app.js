@@ -75,6 +75,7 @@ const state = {
   checking: false, // verificando conta e apps na abertura
   appsRegion: null, // região da lista de apps
   warnOpen: false, // detalhes completos do aviso da lista de apps abertos
+  removing: new Set(), // apps cuja remoção foi pedida e ainda não terminou: "target|região|nome"
   deleteUnmanaged: false, // pode apagar serviços sem a tag do skyship (desligado por padrão)
   scanImages: false, // verificar a imagem com o Trivy antes de publicar
   trivy: null, // o Docker responde para rodar o Trivy? (null = ainda não checado)
@@ -1220,7 +1221,17 @@ function renderAppsHeader() {
 }
 
 /** Estados em que o app ainda está sendo criado, atualizado ou parado: vale reler a lista. */
-const TRANSIENT_STATE = /^(PENDING|DEPLOYING|CREATING|UPDATING|STOPPING|STARTING|SHUTTING-DOWN)$/i;
+const TRANSIENT_STATE = /^(PENDING|DEPLOYING|CREATING|UPDATING|STOPPING|STARTING|SHUTTING-DOWN|DELETING|TERMINATING)$/i;
+/** O app já está sendo removido na AWS (a lista ainda o mostra). */
+const REMOVING_STATE = /^(DELETING|TERMINATING|SHUTTING-DOWN)$/i;
+
+function appKey(a) {
+  return `${a.target}|${a.region}|${a.name}`;
+}
+
+function isRemoving(a) {
+  return state.removing.has(appKey(a)) || REMOVING_STATE.test(a.state);
+}
 const APPS_POLL_MS = 10000;
 const APPS_POLL_MAX = 120; // 20 minutos: depois disso o botão Atualizar continua valendo
 
@@ -1232,7 +1243,7 @@ function scheduleAppsRefresh() {
   clearTimeout(appsTimer);
   appsTimer = null;
   const apps = state.apps && state.apps.res.apps;
-  const busy = (a) => TRANSIENT_STATE.test(a.state) || a.checks === 'initializing';
+  const busy = (a) => TRANSIENT_STATE.test(a.state) || a.checks === 'initializing' || state.removing.has(appKey(a));
   if (state.screen !== 'live' || !apps || !apps.some(busy)) { appsPolls = 0; return; }
   if (appsPolls >= APPS_POLL_MAX) return;
   appsTimer = setTimeout(() => {
@@ -1269,7 +1280,8 @@ async function loadApps({ silent = false } = {}) {
 }
 
 function appCard(app) {
-  const card = el('div', 'card app-card');
+  const removing = isRemoving(app);
+  const card = el('div', 'card app-card' + (removing ? ' removing' : ''));
   const main = el('div', 'app-main');
   const name = el('div', 'app-name');
   name.append(el('b', '', app.name), el('span', 'pill', app.target === 'ec2' ? 'EC2' : 'Lightsail'));
@@ -1277,8 +1289,13 @@ function appCard(app) {
   const sub = el('div', 'app-sub');
   const ok = /^(READY|RUNNING|ACTIVE)$/i.test(app.state);
   const wait = TRANSIENT_STATE.test(app.state);
-  sub.append(el('span', 'state' + (ok ? ' ok' : wait ? ' wait' : ''), app.state));
-  if (app.checks) {
+  if (removing) {
+    // a remoção foi pedida: o estado de antes (READY, running...) não vale mais
+    sub.append(el('span', 'state wait', t('a.removing')));
+  } else {
+    sub.append(el('span', 'state' + (ok ? ' ok' : wait ? ' wait' : ''), app.state));
+  }
+  if (app.checks && !removing) {
     // status checks da instância (EC2): "running" não quer dizer que já passou nas verificações
     const bad = app.checks === 'impaired';
     const good = app.checks === 'ok';
@@ -1302,15 +1319,17 @@ function appCard(app) {
     open.title = t('ext');
     open.append(el('span', '', t('a.open')));
     open.insertAdjacentHTML('beforeend', EXT_ICON);
+    if (removing) { copy.disabled = true; open.disabled = true; }
     card.append(copy, open);
   }
-  const rm = el('button', 'btn small ghost danger-text', t('a.remove'));
+  const rm = el('button', 'btn small ghost danger-text', removing ? t('a.removing') : t('a.remove'));
   rm.type = 'button';
   rm.dataset.removeName = app.name;
   rm.dataset.removeTarget = app.target;
   rm.dataset.removeRegion = app.region;
   rm.dataset.removeManaged = String(app.managed);
-  if (!app.managed && !state.deleteUnmanaged) { rm.disabled = true; rm.title = t('a.removeLocked'); }
+  if (removing) rm.disabled = true;
+  else if (!app.managed && !state.deleteUnmanaged) { rm.disabled = true; rm.title = t('a.removeLocked'); }
   card.append(rm);
   return card;
 }
@@ -1357,16 +1376,37 @@ async function removeListedApp(name, target, region, managed) {
     no: t('l.confirmNo'),
   });
   if (!yes) return;
+  // resposta imediata: o card passa a "Removendo…" e os botões ficam inativos até a remoção terminar
+  const key = appKey({ target, region, name });
+  state.removing.add(key);
+  showError($('#apps-error'), '');
+  renderApps();
   try {
     await invoke('destroy_app', { profile: state.profile, region, target, name });
     state.existing = null;
     if (state.draft.name === name) { state.url = null; state.deployedAt = null; }
   } catch (e) {
+    state.removing.delete(key);
     showError($('#apps-error'), String(e) === 'unmanaged' ? t('a.removeUnmanagedErr') : t('a.removeFailed', { name, err: String(e) }));
+    renderApps();
     return;
   }
-  await loadApps();
+  await settleRemoval(key);
   renderLive();
+}
+
+/** Depois que a AWS aceitou a remoção, relê a lista até o app sumir (ou aparecer como "sendo removido"). */
+async function settleRemoval(key) {
+  for (let i = 0; i < 6; i += 1) {
+    await loadApps({ silent: true });
+    const apps = (state.apps && state.apps.res.apps) || [];
+    const still = apps.find((a) => appKey(a) === key);
+    if (!still || REMOVING_STATE.test(still.state)) break; // sumiu, ou a lista já mostra o estado de remoção
+    await new Promise((r) => setTimeout(r, 3000)); // a AWS ainda não refletiu o pedido
+  }
+  state.removing.delete(key);
+  renderApps();
+  scheduleAppsRefresh(); // se ainda está sendo removido, a lista continua se atualizando
 }
 
 async function removeApp() {
