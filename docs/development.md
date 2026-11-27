@@ -154,7 +154,8 @@ with `cargo metadata --format-version 1 | jq -r '.packages[] | "\(.name) \(.lice
   deploys done so far needed.
 - The ECR lifecycle policy (keep the 3 most recent images) was written from the AWS documentation and has
   never run against a real account. ECR applies it asynchronously.
-- `destroy` for EC2 does not remove the IAM role or the security group.
+- The EC2 cleanup on remove (security group, ECR repository, IAM role and profile) has been written from
+  the AWS documentation and tested with unit tests only; it has not run against a real account.
 - The EC2 policy is limited to `skyship-*` roles, `skyship/*` repositories and tagged instances. Other
   apps may need more than the deploys done so far.
 - An app published from an archive keeps its `skyship.toml` in the temporary extraction folder,

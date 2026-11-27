@@ -102,8 +102,10 @@ The stages run in the order the screen shows them: Build, Service, Upload, Publi
    the instance status checks (`ok`, `initializing`, `impaired`) every 15 seconds. The address is
    plain `http://`: the instance has no TLS and only port 80 is open.
 
-`destroy` for EC2 terminates the instance but keeps the IAM role and the security group. Each
-deploy pushes a new image under a new tag (a timestamp) and sets a lifecycle policy on the
+`destroy` for EC2 terminates the instance, waits for it to be gone and deletes what skyship created for
+the app: the security group, the ECR repository (with its images) and the IAM role and instance profile
+(only if they are skyship's, and not while the app still has an instance in another region: the role is
+global). Each deploy pushes a new image under a new tag (a timestamp) and sets a lifecycle policy on the
 `skyship/<name>` repository that keeps only the 3 most recent images (`ecr::KEEP_IMAGES`); ECR deletes
 the older ones asynchronously, within about a day. Without `ecr:PutLifecyclePolicy` the deploy still
 works and the log says the cleanup was not configured.

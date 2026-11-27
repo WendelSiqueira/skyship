@@ -68,7 +68,7 @@ mais. Ajuste conforme as mensagens de `AccessDenied` que aparecerem.
       "Sid": "EcrSkyshipRepositories",
       "Effect": "Allow",
       "Action": [
-        "ecr:DescribeRepositories", "ecr:CreateRepository", "ecr:PutLifecyclePolicy", "ecr:BatchCheckLayerAvailability",
+        "ecr:DescribeRepositories", "ecr:CreateRepository", "ecr:DeleteRepository", "ecr:PutLifecyclePolicy", "ecr:BatchCheckLayerAvailability",
         "ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage"
       ],
       "Resource": "arn:aws:ecr:*:*:repository/skyship/*"
@@ -77,7 +77,7 @@ mais. Ajuste conforme as mensagens de `AccessDenied` que aparecerem.
       "Sid": "Ec2ReadAndCreate",
       "Effect": "Allow",
       "Action": [
-        "ec2:DescribeInstances", "ec2:DescribeInstanceStatus", "ec2:DescribeSecurityGroups", "ec2:RunInstances",
+        "ec2:DescribeInstances", "ec2:DescribeInstanceStatus", "ec2:DescribeSecurityGroups", "ec2:DeleteSecurityGroup", "ec2:RunInstances",
         "ec2:CreateSecurityGroup", "ec2:AuthorizeSecurityGroupIngress"
       ],
       "Resource": "*"
@@ -100,15 +100,16 @@ mais. Ajuste conforme as mensagens de `AccessDenied` que aparecerem.
       "Sid": "IamSkyshipRoleAndProfile",
       "Effect": "Allow",
       "Action": [
-        "iam:GetRole", "iam:CreateRole", "iam:GetInstanceProfile",
-        "iam:CreateInstanceProfile", "iam:AddRoleToInstanceProfile"
+        "iam:GetRole", "iam:CreateRole", "iam:GetInstanceProfile", "iam:ListAttachedRolePolicies",
+        "iam:CreateInstanceProfile", "iam:AddRoleToInstanceProfile",
+        "iam:RemoveRoleFromInstanceProfile", "iam:DeleteInstanceProfile", "iam:DeleteRole"
       ],
       "Resource": ["arn:aws:iam::*:role/skyship-*", "arn:aws:iam::*:instance-profile/skyship-*"]
     },
     {
       "Sid": "IamAttachOnlyTheTwoManagedPolicies",
       "Effect": "Allow",
-      "Action": "iam:AttachRolePolicy",
+      "Action": ["iam:AttachRolePolicy", "iam:DetachRolePolicy"],
       "Resource": "arn:aws:iam::*:role/skyship-*",
       "Condition": {
         "ArnEquals": {
@@ -202,28 +203,36 @@ O seu usuário precisa destas permissões para fazer isso:
 | Ação | O que o skyship faz com ela |
 |---|---|
 | `ecr:GetAuthorizationToken` | Fazer o login do Docker no ECR. |
-| `ecr:DescribeRepositories`, `ecr:CreateRepository` | Ver se o repositório `skyship/<nome>` existe e criá-lo se não existir. |
+| `ecr:DescribeRepositories`, `ecr:CreateRepository`, `ecr:DeleteRepository` | Ver se o repositório `skyship/<nome>` existe, criá-lo se não existir e apagá-lo (com as imagens) quando o app é removido. |
 | `ecr:PutLifecyclePolicy` | Definir a política de ciclo de vida do repositório: manter só as 3 imagens mais recentes e deixar o ECR apagar as mais antigas. Opcional: sem ela o deploy funciona, mas as imagens antigas se acumulam. |
 | `ecr:BatchCheckLayerAvailability`, `ecr:InitiateLayerUpload`, `ecr:UploadLayerPart`, `ecr:CompleteLayerUpload`, `ecr:PutImage` | Os passos do `docker push`: quais camadas o ECR já tem, o envio de cada camada e o registro da imagem. |
 | `ec2:DescribeInstances` | Achar a instância pela tag, esperar ela ficar `running`, ler o endereço público e montar a lista de apps. |
 | `ec2:DescribeInstanceStatus` | Ler os status checks (`initializing`, `ok`) mostrados no log e na lista de apps. Opcional. |
-| `ec2:DescribeSecurityGroups`, `ec2:CreateSecurityGroup`, `ec2:AuthorizeSecurityGroupIngress` | Reaproveitar ou criar o security group e abrir a porta 80. |
+| `ec2:DescribeSecurityGroups`, `ec2:CreateSecurityGroup`, `ec2:AuthorizeSecurityGroupIngress`, `ec2:DeleteSecurityGroup` | Reaproveitar ou criar o security group, abrir a porta 80 e apagar o grupo quando o app é removido. |
 | `ec2:RunInstances` | Lançar a instância na primeira vez. |
 | `ec2:CreateTags` | Marcar a instância com `skyship:name` e `Name` no lançamento (só no lançamento). |
 | `ec2:StartInstances` | Acordar uma instância parada quando o app é publicado de novo. |
 | `ec2:TerminateInstances` | Remover o app. |
-| `iam:GetRole`, `iam:GetInstanceProfile` | Ver se a role e o profile já existem, para reaproveitá-los. |
+| `iam:GetRole`, `iam:GetInstanceProfile`, `iam:ListAttachedRolePolicies` | Ver se a role e o profile já existem (para reaproveitá-los) e conferir que a role é a que o skyship criou antes de apagá-la. |
 | `iam:CreateRole`, `iam:CreateInstanceProfile`, `iam:AddRoleToInstanceProfile` | Criá-los na primeira vez. |
-| `iam:AttachRolePolicy` | Anexar as duas políticas gerenciadas à role (e só essas duas, veja acima). |
+| `iam:AttachRolePolicy`, `iam:DetachRolePolicy` | Anexar as duas políticas gerenciadas à role e desanexá-las quando o app é removido (e só essas duas, veja acima). |
+| `iam:RemoveRoleFromInstanceProfile`, `iam:DeleteInstanceProfile`, `iam:DeleteRole` | Apagar o instance profile e a role quando o app é removido. |
 | `iam:PassRole` | Entregar a role à EC2 ao lançar a instância. Sem ela o `RunInstances` é recusado; está limitada a roles `skyship-*` e ao serviço EC2. |
 | `ssm:GetParameter` | Ler o id da imagem atual do Amazon Linux no parâmetro público. |
 | `ssm:DescribeInstanceInformation` | Esperar o agente SSM da instância ficar online. |
 | `ssm:SendCommand`, `ssm:GetCommandInvocation` | Executar o script de deploy na instância (login no ECR, baixar a imagem, reiniciar o container) e ler se deu certo. |
 
-### O que fica depois de remover um app
+### O que é removido quando você remove um app
 
-Remover um app da EC2 encerra a instância. A role do IAM, o instance profile, o security group e as
-imagens do ECR continuam na conta, então a próxima publicação com o mesmo nome reaproveita os três
-primeiros. Só as imagens do ECR geram custos, e o próprio ECR guarda apenas as 3 mais recentes (a
-política de ciclo de vida apaga as outras, de forma assíncrona: em até cerca de um dia). Apague o
-repositório à mão se não for usar o app de novo.
+Remover um app da EC2 encerra a instância e depois apaga o que o skyship criou para ele: o security
+group, o repositório do ECR `skyship/<nome>` (com as imagens) e a role e o instance profile do IAM
+`skyship-<nome>`. Nada que ele não criou é tocado:
+
+- o security group só é apagado se a descrição for a que o skyship grava;
+- a role só é apagada se a política de confiança for exatamente a do skyship, se não tiver outra
+  política além das duas gerenciadas e se não houver instância do mesmo app em outra região (a role
+  do IAM é global, vale para todas as regiões);
+- o que não puder ser apagado é mantido, e o log diz por quê.
+
+A limpeza também roda quando não sobrou instância (para limpar o resto de uma remoção anterior):
+remova o app de novo, na pasta dele, com `skyship destroy`.

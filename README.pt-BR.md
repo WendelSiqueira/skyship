@@ -96,8 +96,8 @@ container service. Apague um que você não usa, ou peça à AWS para aumentar o
 ou um chamado de suporte). É um limite da conta, não do skyship.
 
 **Vou ser cobrado depois que testar?** Sim, enquanto o app existir. O `skyship destroy --yes`
-(ou Remover no app de desktop) remove o serviço do Lightsail. Na EC2 ele encerra a instância, mas a função de permissões e a regra
-de rede que ele criou ficam para trás (elas não custam nada).
+(ou Remover no app de desktop) remove o serviço do Lightsail. Na EC2 ele encerra a instância e apaga também o que o skyship criou
+para ela (o security group, o repositório do ECR com as imagens, e a role e o profile do IAM).
 
 **Funciona no Windows ou no macOS?** No Windows, sim: foi compilado e testado no Windows 11 com o
 Docker Desktop (backend WSL 2, modo Linux containers), e um site foi publicado no Lightsail pelo app

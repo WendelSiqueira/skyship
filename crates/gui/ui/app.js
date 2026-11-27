@@ -1352,7 +1352,7 @@ async function removeListedApp(name, target, region, managed) {
   const warn = managed ? '' : `${t('a.removeUnmanagedWarn')}\n\n`;
   const yes = await confirmModal({
     title: t('l.confirmTitle', { name }),
-    text: `${name} (${target === 'ec2' ? 'EC2' : 'Lightsail'}, ${regionLabel(region)})\n\n${warn}${t('l.confirmText')}`,
+    text: `${name} (${target === 'ec2' ? 'EC2' : 'Lightsail'}, ${regionLabel(region)})\n\n${warn}${t('l.confirmText')}${target === 'ec2' ? '\n\n' + t('a.removeEc2Cleans') : ''}`,
     yes: t('l.confirmYes'),
     no: t('l.confirmNo'),
   });
@@ -1373,7 +1373,7 @@ async function removeApp() {
   const name = state.draft.name;
   const yes = await confirmModal({
     title: t('l.confirmTitle', { name }),
-    text: t('l.confirmText'),
+    text: t('l.confirmText') + (state.draft.target === 'ec2' ? '\n\n' + t('a.removeEc2Cleans') : ''),
     yes: t('l.confirmYes'),
     no: t('l.confirmNo'),
   });

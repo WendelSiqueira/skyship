@@ -96,8 +96,8 @@ container service. Delete one you do not use, or ask AWS to raise the limit (Ser
 support request). This is a limit of the account, not of skyship.
 
 **Will I be charged after I try it?** Yes, as long as the app exists. `skyship destroy --yes`
-(or Remove in the desktop app) removes the Lightsail service. For EC2 it ends the instance, but the permissions role and network
-rule it created stay behind (they are free).
+(or Remove in the desktop app) removes the Lightsail service. For EC2 it ends the instance and also deletes what skyship created for it
+(the security group, the ECR repository with its images, and the IAM role and profile).
 
 **Does it work on Windows or macOS?** On Windows, yes: it was built and tested on Windows 11 with
 Docker Desktop (WSL 2 backend, Linux containers mode), and a site was published to Lightsail from the
