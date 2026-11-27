@@ -73,7 +73,9 @@ access to the account can add it): it is only a guard against removing something
   the AWS SDK only when that profile is chosen. The one exception at startup is the profile chosen
   last time and a profile named `skyship`, which the app itself creates.
 - `skyship login` checks the keys with AWS (`sts:GetCallerIdentity`) **before** saving anything,
-  then writes them to `~/.aws/credentials` through a temporary file with permission `600`.
+  then writes them to `~/.aws/credentials` through a temporary file with permission `600` (Linux
+  and macOS; Windows has no such mode, so the file keeps the default permissions of the user's
+  profile folder).
 - The keys sit in plain text in that file. Any program running as your user can read them.
 - The permissions you give the user are the real limit. Use the minimal policies in
   [permissions.md](permissions.md), never the root account.

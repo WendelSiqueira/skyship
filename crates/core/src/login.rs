@@ -128,20 +128,27 @@ pub fn policy(target: Target) -> &'static str {
     }
 }
 
+/// Pasta pessoal: `HOME` (Linux e macOS) ou `USERPROFILE` (Windows).
+fn home_dir() -> Result<PathBuf> {
+    ["HOME", "USERPROFILE"]
+        .iter()
+        .find_map(|k| std::env::var_os(k).filter(|v| !v.is_empty()))
+        .map(PathBuf::from)
+        .context("não achei a pasta pessoal (HOME ou USERPROFILE não definidos)")
+}
+
 pub fn credentials_path() -> Result<PathBuf> {
     if let Ok(p) = std::env::var("AWS_SHARED_CREDENTIALS_FILE") {
         return Ok(p.into());
     }
-    let home = std::env::var("HOME").context("HOME não definido")?;
-    Ok(PathBuf::from(home).join(".aws").join("credentials"))
+    Ok(home_dir()?.join(".aws").join("credentials"))
 }
 
 fn config_path() -> Result<PathBuf> {
     if let Ok(p) = std::env::var("AWS_CONFIG_FILE") {
         return Ok(p.into());
     }
-    let home = std::env::var("HOME").context("HOME não definido")?;
-    Ok(PathBuf::from(home).join(".aws").join("config"))
+    Ok(home_dir()?.join(".aws").join("config"))
 }
 
 /// Nomes de perfis dentro do texto de `~/.aws/credentials` (`[nome]`) ou de `~/.aws/config`
@@ -258,21 +265,28 @@ pub fn upsert_profile(content: &str, profile: &str, key_id: &str, secret: &str) 
     out
 }
 
+/// Grava por um arquivo temporário. No Linux e no macOS o arquivo nasce com permissão 600. No Windows não há
+/// esse modo: ele fica na pasta pessoal do usuário, protegida pelas permissões padrão dela.
 fn write_private(path: &PathBuf, content: &str) -> Result<()> {
-    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
     let tmp = path.with_extension("skyship-tmp");
-    let mut f = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(&tmp)?;
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    let mut f = opts.open(&tmp)?;
     f.write_all(content.as_bytes())?;
     drop(f);
-    std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
+    }
     std::fs::rename(&tmp, path)?;
     Ok(())
 }

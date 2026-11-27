@@ -166,9 +166,8 @@ impl Config {
     /// para que um `skyship.toml` alheio não faça o build empacotar arquivos pessoais
     /// (ex.: `~/.aws`) dentro da imagem enviada.
     pub fn confine_paths(&mut self, dir: &Path) -> Result<()> {
-        let root = dir
-            .canonicalize()
-            .with_context(|| format!("pasta do projeto inacessível: {}", dir.display()))?;
+        let root =
+            dunce::canonicalize(dir).with_context(|| format!("pasta do projeto inacessível: {}", dir.display()))?;
         // Só confere a contenção aqui. Se os arquivos existem, o tipo também é conferido; se não
         // existem, quem precisa deles (o deploy) reclama. `status` e `destroy` não precisam deles.
         let context = confine(&root, &self.context, "context")?;
@@ -281,7 +280,7 @@ pub(crate) fn confine(root: &Path, rel: &str, field: &str) -> Result<PathBuf> {
         bail!("{field} deve ser um caminho relativo à pasta do projeto: {rel:?}");
     }
     let full = root.join(rel_path);
-    let canon = match full.canonicalize() {
+    let canon = match dunce::canonicalize(&full) {
         Ok(c) => c,
         // ainda não existe: sem como resolver links, então só vale a regra léxica (sem `..`)
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -456,6 +455,7 @@ mod tests {
         assert!(c.confine_paths(&d).is_err());
     }
 
+    #[cfg(unix)]
     #[test]
     fn symlink_pointing_outside_is_rejected() {
         let d = project();
