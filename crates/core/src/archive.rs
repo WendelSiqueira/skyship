@@ -206,8 +206,11 @@ fn extract_tar<R: Read>(reader: R, dest: &Path, limits: Limits) -> Result<()> {
 
 /// RAR é um formato proprietário: usa o `bsdtar` (libarchive) se o sistema tiver. A extração roda
 /// com tempo limite e depois passa pelo mesmo `sanitize`.
+/// No Windows 10 e 11 o `tar.exe` que vem no sistema é o bsdtar.
+const RAR_TOOL: &str = if cfg!(windows) { "tar" } else { "bsdtar" };
+
 fn extract_rar(archive: &Path, dest: &Path) -> Result<()> {
-    let child = std::process::Command::new("bsdtar")
+    let child = std::process::Command::new(RAR_TOOL)
         .arg("-xf")
         .arg(archive)
         .arg("-C")
@@ -216,7 +219,7 @@ fn extract_rar(archive: &Path, dest: &Path) -> Result<()> {
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|_| {
-            anyhow::anyhow!("para abrir .rar é preciso o `bsdtar` (pacote libarchive) instalado; ou use .zip / .tar.gz")
+            anyhow::anyhow!("para abrir .rar é preciso o `{RAR_TOOL}` (libarchive) instalado; ou use .zip / .tar.gz")
         })?;
     let (tx, rx) = std::sync::mpsc::channel();
     let handle = std::thread::spawn(move || {
