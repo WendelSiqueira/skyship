@@ -127,6 +127,26 @@ cargo clippy --all-targets -p skyship-gui -- -D warnings && cargo test -p skyshi
 node scripts/check-ui.mjs
 ```
 
+## Arch Linux package
+
+`packaging/arch/PKGBUILD` builds `skyship-bin`, which installs the desktop app (not the command
+line tool) from the `.deb` of a release. It uses the system WebKitGTK (`webkit2gtk-4.1`, `gtk3`), so
+nothing is compiled, and installs the licenses in `/usr/share/licenses/skyship-bin/`. Docker is an
+optional dependency. It is **not** published in the AUR: build and install it from the repository.
+
+```bash
+cd packaging/arch
+makepkg -si          # downloads skyship_<version>_amd64.deb from the release
+```
+
+- It points at the release `v<pkgver>` on GitHub, so it only works once that release is published.
+  The checksums are `SKIP` until then: after publishing, run `updpkgsums` in that folder.
+- To try it before a release, copy the `PKGBUILD` to an empty folder, put the `.deb` (from the
+  rehearsal of `release.yml`) and `LICENSE-MIT` / `LICENSE-APACHE` next to it, change `source` to the
+  local file names, and run `makepkg --nodeps` (it does not install anything).
+- Checked with the `.deb` of the first rehearsal: the package builds, lists the right
+  dependencies, and the app opens with Arch's WebKitGTK. The AppImage of the same run also opens.
+
 ## Licenses
 
 skyship is `MIT OR Apache-2.0` (`LICENSE-MIT`, `LICENSE-APACHE`, `license` in the workspace
