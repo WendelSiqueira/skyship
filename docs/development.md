@@ -70,17 +70,29 @@ Everything is in `.github/`; actions are pinned by commit hash (Dependabot propo
 - **`audit.yml`**: `cargo audit`, when the dependencies change, on `main` and every Monday.
   Vulnerabilities fail it; the informational warnings from Tauri/GTK
   (see [security.md](security.md)) do not.
-- **`release.yml`**: runs when a tag `vX.Y.Z` is pushed. It checks that the tag equals the workspace
-  version and that its commit is on `main`, runs the tests, builds `skyship` and `skyship-gui` in
-  release mode on Ubuntu 22.04, and creates a **draft** release with
-  `skyship-vX.Y.Z-x86_64-linux.tar.gz` and its `.sha256` (both programs, the licenses, the READMEs
-  and the terms). Publishing the draft is a manual step. The package carries a build provenance
-attestation signed by GitHub (which workflow, which commit); check a download with
-`gh attestation verify skyship-vX.Y.Z-x86_64-linux.tar.gz --repo WendelSiqueira/skyship`. The
-binaries themselves are not code-signed.
+  - `windows`: `cargo test --locked --workspace` on Windows (it is not a required check yet)
+- **`release.yml`**: builds the packages for users and, on a tag, creates a **draft** release.
+  - **Packages:** on Linux an AppImage and a `.deb` (Ubuntu 22.04); on Windows an NSIS installer
+    (`skyship_X.Y.Z_x64-setup.exe`, per user, no administrator needed) and a `-portable.zip` with
+    `skyship.exe` (terminal) and `skyship-gui.exe`. The desktop app is the product; the zip is for
+    running from a terminal and seeing the logs.
+  - **Rehearsal:** a pull request that touches `release.yml`, `tauri.conf.json` or the icons, or a
+    manual run, builds the same packages and keeps them as workflow artifacts for 7 days. Nothing is
+    tagged, attested or released. Download them from the run page and try them.
+  - **Tag `vX.Y.Z`:** the `check` job requires the tag to equal the workspace version (and the
+    version in `crates/gui/tauri.conf.json`) and its commit to be on `main`; `cargo audit` and the
+    tests must pass; the packages get a build provenance attestation signed by GitHub; and a draft
+    release is created with `SHA256SUMS`. A `0.x` version is marked as a pre-release. Publishing the
+    draft is a manual step. Check a download with `sha256sum -c SHA256SUMS` and
+    `gh attestation verify <file> --repo WendelSiqueira/skyship`.
+  - **Not signed yet:** the Windows installer is not code-signed, so SmartScreen warns ("More
+    info → Run anyway"). macOS is not built yet.
+  - `tauri-cli` is downloaded from the official releases with a pinned version and SHA-256
+    (`TAURI_CLI_*` in the workflow); update both together.
 
-To make a release: raise `version` in the root `Cargo.toml` through a pull request, merge it, tag
-that commit on `main` (`git tag vX.Y.Z && git push origin vX.Y.Z`), then review and publish the draft.
+To make a release: raise `version` in the root `Cargo.toml` **and** in `crates/gui/tauri.conf.json`
+through a pull request, merge it, tag that commit on `main` (`git tag vX.Y.Z && git push origin
+vX.Y.Z`), then review and publish the draft.
 
 Run the same checks locally before opening a pull request:
 
@@ -89,6 +101,35 @@ cargo fmt --all && cargo clippy --all-targets -- -D warnings && cargo test
 cargo clippy --all-targets -p skyship-gui -- -D warnings && cargo test -p skyship-gui
 node scripts/check-ui.mjs
 ```
+
+## Testing on Windows
+
+The desktop app has only been run on Linux so far. To try it on Windows:
+
+- **Prerequisites:** [Rust](https://rustup.rs/) with the MSVC toolchain (it asks for the Visual Studio
+  Build Tools, workload "Desktop development with C++"), the WebView2 runtime (already in Windows 11
+  and in up-to-date Windows 10), Git, and [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/)
+  with Linux containers.
+- **Build and run from a terminal** (PowerShell), which also shows the logs:
+
+  ```powershell
+  cargo test --workspace                 # the same tests as CI
+  cargo build -p skyship-gui             # the app
+  .\target\debug\skyship-gui.exe
+  cargo run -p skyship -- doctor         # the CLI
+  ```
+
+- **Or** download the installer or the `-portable.zip` from the rehearsal run of `release.yml`.
+- **What has not been verified on Windows** (try these and report what breaks):
+  - the AWS profiles are read from `%USERPROFILE%\.aws\credentials` and `config`; `skyship login` writes
+    the credentials file there (no `600` mode on Windows; it relies on the profile folder's permissions)
+  - choosing a project folder and building it with `docker build` (paths, long paths, `\r\n` in the
+    Dockerfile)
+  - the Trivy check mounts `/var/run/docker.sock` into the Trivy container; Docker Desktop may or
+    may not accept that on Windows
+  - opening a `.zip` / `.tar.gz` archive, and a `.rar` (it uses the `tar.exe` that comes with Windows)
+  - the "Open" buttons (the default browser), the copy buttons, the three languages, light and dark
+    themes, and uninstalling from "Apps & features"
 
 ## Licenses
 
