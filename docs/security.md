@@ -75,6 +75,24 @@ access to the account can add it): it is only a guard against removing something
 - `skyship login` checks the keys with AWS (`sts:GetCallerIdentity`) **before** saving anything,
   then writes them to `~/.aws/credentials` through a temporary file with permission `600`.
 - The keys sit in plain text in that file. Any program running as your user can read them.
+- In the desktop app the person chooses between **saving** the keys in that file (the profile
+  `skyship`, recorded in `settings.json` as written by the app) and **using them only now**. In the
+  second case the keys are validated and kept in the memory of the app process (`SessionCreds`),
+  never written to disk, and dropped when the app closes or another profile is chosen.
+  - Each key is stored **obfuscated** (`crates/gui/src/sealed.rs`): split into a random pad from the
+    operating system and the XOR of the pad with the key, in two separate allocations, so neither
+    holds the text. The two parts are joined only at the moment of use, and that copy, the parts
+    themselves and the strings that came from the screen are wiped from memory (`zeroize`) when
+    dropped.
+  - This is obfuscation, **not strong encryption**: both parts live in the same process, so
+    something that can read all of the app's memory while it runs can join them. It protects against
+    accidental leaks, where someone searches for the key text in a core dump, in swap, or with a tool
+    that scans for patterns such as `AKIA...`. The AWS SDK also keeps its own copy of the credentials
+    while a request is running, and the keys pass through the webview once, when typed; neither of
+    those can be wiped.
+- The app can delete a profile from `~/.aws/credentials`, but **only one it wrote itself** (the list in
+  `settings.json`); `remove_saved_profile` refuses any other name. Deleting the profile does not cancel
+  the access key: that is done in IAM.
 - The permissions you give the user are the real limit. Use the minimal policies in
   [permissions.md](permissions.md), never the root account.
 

@@ -108,8 +108,11 @@ needs. Step by step instructions are in [docs/permissions.md](docs/permissions.m
 
 **Do I need the AWS command line tool?** No.
 
-**Is it safe to give it my keys?** They stay on your computer, in `~/.aws/credentials` with
-restricted permissions, and are checked with AWS before being saved. Use the dedicated user from
+**Is it safe to give it my keys?** They are checked with AWS before they are used, and **you choose** what
+happens next: save them on your computer, in `~/.aws/credentials` (restricted permissions on Linux and
+macOS, your user folder's permissions on Windows; any program running as you can read that file), or use
+them only now, kept in the app's memory and gone when you close it (desktop app only; nothing is
+written to the computer). The app can delete the keys it saved (button on the Credentials screen). Use the dedicated user from
 [docs/permissions.md](docs/permissions.md), never your main account. More in
 [docs/security.md](docs/security.md).
 

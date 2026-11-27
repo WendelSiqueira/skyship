@@ -108,8 +108,11 @@ que o skyship precisa. O passo a passo está em [docs/permissions.pt-BR.md](docs
 
 **Preciso da ferramenta de linha de comando da AWS?** Não.
 
-**É seguro dar minhas chaves?** Elas ficam no seu computador, em `~/.aws/credentials` com
-permissões restritas, e são conferidas na AWS antes de serem salvas. Use o usuário dedicado de
+**É seguro dar minhas chaves?** Elas são conferidas na AWS antes de serem usadas, e **você escolhe** o
+que acontece depois: salvá-las no computador, em `~/.aws/credentials` (permissões restritas no Linux e
+no macOS, as da sua pasta de usuário no Windows; qualquer programa que rode como você lê esse arquivo),
+ou usá-las só agora, na memória do app, e elas somem quando você o fecha (só no app de desktop; nada é
+gravado no computador). O app consegue apagar as chaves que salvou (botão na tela de Credenciais). Use o usuário dedicado de
 [docs/permissions.pt-BR.md](docs/permissions.pt-BR.md), nunca a sua conta principal. Mais detalhes em
 [docs/security.md](docs/security.md).
 
