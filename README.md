@@ -112,7 +112,7 @@ needs. Step by step instructions are in [docs/permissions.md](docs/permissions.m
 happens next: save them on your computer, in `~/.aws/credentials` (restricted permissions on Linux and
 macOS, your user folder's permissions on Windows; any program running as you can read that file), or use
 them only now, kept in the app's memory and gone when you close it (desktop app only; nothing is
-written to the computer). The app can delete the keys it saved (button on the Credentials screen). Use the dedicated user from
+written to the computer). The app does not delete saved keys later: to remove them, delete the `[skyship]` profile from that file and the access key in AWS (IAM → Users → Security credentials). Use the dedicated user from
 [docs/permissions.md](docs/permissions.md), never your main account. More in
 [docs/security.md](docs/security.md).
 
