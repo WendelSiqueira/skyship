@@ -79,6 +79,8 @@ access to the account can add it): it is only a guard against removing something
   `skyship`) and **using them only now**. In the
   second case the keys are validated and kept in the memory of the app process (`SessionCreds`),
   never written to disk, and dropped when the app closes or another profile is chosen.
+  This mode was run once against a real account: with "use only now" the apps list loaded, and
+  `~/.aws/credentials` was not modified (same modification time before and after).
   - Each key is stored **obfuscated** (`crates/gui/src/sealed.rs`): split into a random pad from the
     operating system and the XOR of the pad with the key, in two separate allocations, so neither
     holds the text. The two parts are joined only at the moment of use, and that copy, the parts
