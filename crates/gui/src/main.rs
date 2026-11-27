@@ -4,8 +4,10 @@
 //! Interface gráfica do skyship. Só traduz cliques em chamadas ao `skyship-core` e repassa os
 //! eventos de progresso para a janela; nenhuma regra de deploy fica aqui.
 
+mod sealed;
 mod settings;
 
+use sealed::Sealed;
 use serde::{Deserialize, Serialize};
 use settings::Settings;
 use skyship_core::{
@@ -24,6 +26,7 @@ use std::{
     sync::Mutex,
 };
 use tauri::{AppHandle, Emitter, Manager, State};
+use zeroize::{Zeroize, Zeroizing};
 
 type CmdResult<T> = Result<T, String>;
 
@@ -32,6 +35,32 @@ fn err(e: anyhow::Error) -> String {
 }
 
 /// Deploy em andamento (no máximo um por vez); guardado para poder cancelar.
+/// Nome do "perfil" das chaves que existem só na memória desta sessão (não é um perfil do arquivo da AWS).
+const SESSION_PROFILE: &str = "(sessão)";
+
+/// Chaves informadas para uso só nesta sessão: ficam na memória do app, ofuscadas (veja `sealed`), e nunca
+/// vão para o disco.
+struct SessionCreds(Mutex<Option<(Sealed, Sealed)>>);
+
+/// As chaves da sessão abertas, para uso imediato: cada texto se apaga da memória ao ser descartado.
+type OpenCreds = (Zeroizing<String>, Zeroizing<String>);
+
+impl SessionCreds {
+    fn get(&self) -> Option<OpenCreds> {
+        self.0.lock().unwrap().as_ref().map(|(k, s)| (k.open(), s.open()))
+    }
+}
+
+/// Conecta à AWS com o perfil do arquivo de credenciais ou, para `(sessão)`, com as chaves da memória.
+async fn aws_for(session: Option<OpenCreds>, region: &str, profile: Option<&str>) -> CmdResult<Aws> {
+    if profile == Some(SESSION_PROFILE) {
+        let (key, secret) =
+            session.ok_or("as chaves desta sessão não estão mais na memória do app; informe-as de novo")?;
+        return Ok(Aws::with_credentials(region, &key, &secret).await);
+    }
+    Ok(Aws::connect(region, profile).await)
+}
+
 struct DeployState(Mutex<Option<tauri::async_runtime::JoinHandle<()>>>);
 
 #[derive(Serialize)]
@@ -189,12 +218,12 @@ async fn save_credentials(profile: String, key_id: String, secret: String, regio
 
 /// Confere se um perfil existente tem credenciais válidas; devolve o número da conta.
 #[tauri::command]
-async fn check_profile(profile: Option<String>, region: String) -> CmdResult<String> {
+async fn check_profile(session: State<'_, SessionCreds>, profile: Option<String>, region: String) -> CmdResult<String> {
     if !skyship_core::regions::is_known(&region) {
         return Err("região desconhecida".into());
     }
-    Aws::connect(&region, profile.as_deref())
-        .await
+    aws_for(session.get(), &region, profile.as_deref())
+        .await?
         .account()
         .await
         .map_err(err)
@@ -238,6 +267,7 @@ fn save_config(app: AppHandle, dir: Option<String>, input: ConfigInput) -> CmdRe
 async fn start_deploy(
     app: AppHandle,
     state: State<'_, DeployState>,
+    session: State<'_, SessionCreds>,
     dir: String,
     profile: Option<String>,
 ) -> CmdResult<()> {
@@ -246,9 +276,17 @@ async fn start_deploy(
     if slot.is_some() {
         return Err("já existe um deploy em andamento".into());
     }
+    let session_creds = session.get();
     let handle = tauri::async_runtime::spawn(async move {
-        let aws = Aws::connect(&cfg.region, profile.as_deref()).await;
         let emitter = app.clone();
+        let aws = match aws_for(session_creds, &cfg.region, profile.as_deref()).await {
+            Ok(aws) => aws,
+            Err(message) => {
+                let _ = emitter.emit("deploy-event", &Event::Failed { message });
+                *app.state::<DeployState>().0.lock().unwrap() = None;
+                return;
+            }
+        };
         let progress = Progress::new(move |e| {
             let _ = emitter.emit("deploy-event", &e);
         });
@@ -274,27 +312,27 @@ fn cancel_deploy(app: AppHandle, state: State<'_, DeployState>) {
 }
 
 #[tauri::command]
-async fn status(dir: String, profile: Option<String>) -> CmdResult<Vec<StatusEntry>> {
+async fn status(session: State<'_, SessionCreds>, dir: String, profile: Option<String>) -> CmdResult<Vec<StatusEntry>> {
     let cfg = Config::load_from(Path::new(&dir)).map_err(err)?;
-    let aws = Aws::connect(&cfg.region, profile.as_deref()).await;
+    let aws = aws_for(session.get(), &cfg.region, profile.as_deref()).await?;
     skyship_core::status(&aws, &cfg).await.map_err(err)
 }
 
 /// Apps encontrados na região (Lightsail e EC2). Funciona sem um projeto aberto.
 #[tauri::command]
-async fn list_apps(profile: Option<String>, region: String) -> CmdResult<ListResult> {
+async fn list_apps(session: State<'_, SessionCreds>, profile: Option<String>, region: String) -> CmdResult<ListResult> {
     if !skyship_core::regions::is_known(&region) {
         return Err("região desconhecida".into());
     }
-    let aws = Aws::connect(&region, profile.as_deref()).await;
+    let aws = aws_for(session.get(), &region, profile.as_deref()).await?;
     Ok(skyship_core::list_apps(&aws).await)
 }
 
 /// Não pergunta nada: a confirmação é feita na interface antes de chamar.
 #[tauri::command]
-async fn destroy(dir: String, profile: Option<String>) -> CmdResult<()> {
+async fn destroy(session: State<'_, SessionCreds>, dir: String, profile: Option<String>) -> CmdResult<()> {
     let cfg = Config::load_from(Path::new(&dir)).map_err(err)?;
-    let aws = Aws::connect(&cfg.region, profile.as_deref()).await;
+    let aws = aws_for(session.get(), &cfg.region, profile.as_deref()).await?;
     skyship_core::destroy(&aws, &cfg, &Progress::silent())
         .await
         .map_err(err)
@@ -304,6 +342,7 @@ async fn destroy(dir: String, profile: Option<String>) -> CmdResult<()> {
 #[tauri::command]
 async fn destroy_app(
     app: AppHandle,
+    session: State<'_, SessionCreds>,
     profile: Option<String>,
     region: String,
     target: String,
@@ -311,10 +350,40 @@ async fn destroy_app(
 ) -> CmdResult<()> {
     let allow_unmanaged = settings::load(&config_dir(&app)).delete_unmanaged;
     let target: skyship_core::config::Target = target.parse()?;
-    let aws = Aws::connect(&region, profile.as_deref()).await;
+    let aws = aws_for(session.get(), &region, profile.as_deref()).await?;
     skyship_core::destroy_app(&aws, &name, &region, target, allow_unmanaged, &Progress::silent())
         .await
         .map_err(err)
+}
+
+/// Valida as chaves na AWS e as guarda SÓ na memória do app, sem gravar nada no computador.
+#[tauri::command]
+async fn use_credentials_session(
+    session: State<'_, SessionCreds>,
+    mut key_id: String,
+    mut secret: String,
+    region: String,
+) -> CmdResult<Account> {
+    let verified = login::verify(&key_id, &secret, &region).await.map_err(err);
+    // guarda ofuscado e apaga os textos que vieram da tela
+    let sealed = (
+        Sealed::new(key_id.trim().to_string()),
+        Sealed::new(secret.trim().to_string()),
+    );
+    key_id.zeroize();
+    secret.zeroize();
+    let id = verified?;
+    *session.0.lock().unwrap() = Some(sealed);
+    Ok(Account {
+        account: id.account,
+        arn: id.arn,
+    })
+}
+
+/// Esquece as chaves da sessão (por exemplo, ao trocar para um perfil salvo).
+#[tauri::command]
+fn forget_session(session: State<'_, SessionCreds>) {
+    *session.0.lock().unwrap() = None;
 }
 
 fn main() {
@@ -334,12 +403,15 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(DeployState(Mutex::new(None)))
+        .manage(SessionCreds(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             regions,
             policy,
             profiles,
             docker_ok,
             save_credentials,
+            use_credentials_session,
+            forget_session,
             check_profile,
             inspect_project,
             save_config,

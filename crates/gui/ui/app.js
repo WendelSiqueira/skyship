@@ -11,6 +11,7 @@ const STAGES = ['build', 'service', 'upload', 'publish', 'wait_live'];
 const LS_SIZES = ['nano', 'micro', 'small', 'medium', 'large'];
 const EC2_SIZES = ['t3.micro', 't3.small', 't3.medium'];
 const DEFAULT_PROFILE = 'skyship';
+const SESSION_PROFILE = '(sessão)'; // chaves só na memória do app (o backend usa o mesmo nome)
 const DEFAULT_REGION = 'us-east-1';
 // Troque a versão quando o texto dos termos mudar: o app pede o aceite de novo.
 const TERMS_VERSION = '2026-11-26-5';
@@ -235,7 +236,9 @@ function renderFoot() {
   const text = state.checking
     ? t('f.checking')
     : state.account
-      ? t('f.account', { acc: shortAccount(state.account), profile: state.profile || DEFAULT_PROFILE })
+      ? state.profile === SESSION_PROFILE
+        ? t('f.accountSession', { acc: shortAccount(state.account) })
+        : t('f.account', { acc: shortAccount(state.account), profile: state.profile || DEFAULT_PROFILE })
       : t('f.none');
   $('#foot-text').textContent = text + ' ▾'; // espaço sem quebra: a seta não fica sozinha na linha
   if (!$('#pmenu').hidden) renderProfileMenu();
@@ -302,7 +305,9 @@ function goStep(key) {
 function renderConnect() {
   const note = $('#connected-note');
   if (state.account) {
-    note.textContent = t('c.connected', { acc: shortAccount(state.account), profile: state.profile || DEFAULT_PROFILE });
+    note.textContent = state.profile === SESSION_PROFILE
+      ? t('c.connectedSession', { acc: shortAccount(state.account) })
+      : t('c.connected', { acc: shortAccount(state.account), profile: state.profile || DEFAULT_PROFILE });
     note.hidden = false;
   } else {
     note.hidden = true;
@@ -452,7 +457,12 @@ async function useAccount(profile, account) {
   state.profileAccounts[profile] = account;
   state.apps = null; // a lista de apps é da conta anterior
   state.url = null;
-  store.set('profile', profile);
+  if (profile === SESSION_PROFILE) {
+    // não é um perfil do arquivo: não é lembrado para a próxima abertura
+  } else {
+    store.set('profile', profile);
+    invoke('forget_session').catch(() => {}); // trocou para um perfil salvo: esquece as chaves da memória
+  }
   renderFoot();
   await routeAfterAccount();
 }
@@ -473,10 +483,18 @@ async function connectWithKeys() {
   const btn = $('#connect-go');
   btn.disabled = true;
   btn.textContent = t('c.validating');
+  const sessionOnly = ($('input[name="save-mode"]:checked') || {}).value === 'session';
   try {
-    const res = await invoke('save_credentials', { profile: DEFAULT_PROFILE, keyId, secret, region: DEFAULT_REGION });
-    $('#secret').value = '';
-    useAccount(DEFAULT_PROFILE, res.account);
+    if (sessionOnly) {
+      const res = await invoke('use_credentials_session', { keyId, secret, region: DEFAULT_REGION });
+      $('#secret').value = '';
+      $('#key-id').value = '';
+      useAccount(SESSION_PROFILE, res.account);
+    } else {
+      const res = await invoke('save_credentials', { profile: DEFAULT_PROFILE, keyId, secret, region: DEFAULT_REGION });
+      $('#secret').value = '';
+      useAccount(DEFAULT_PROFILE, res.account);
+    }
   } catch (e) {
     showError(err, String(e));
   } finally {

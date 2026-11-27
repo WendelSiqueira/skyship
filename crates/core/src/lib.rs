@@ -39,6 +39,18 @@ impl Aws {
         }
     }
 
+    /// Conecta com chaves informadas na hora, sem ler nem gravar nenhum arquivo de credenciais: as
+    /// chaves existem só na memória de quem chama.
+    pub async fn with_credentials(region: &str, key_id: &str, secret: &str) -> Self {
+        let creds = aws_credential_types::Credentials::new(key_id.trim(), secret.trim(), None, None, "skyship-session");
+        let sdk = aws_config::defaults(aws_config::BehaviorVersion::latest())
+            .region(aws_config::Region::new(region.to_string()))
+            .credentials_provider(creds)
+            .load()
+            .await;
+        Self { sdk }
+    }
+
     /// Número da conta AWS; falha se as credenciais forem inválidas ou estiverem ausentes.
     pub async fn account(&self) -> Result<String> {
         let id = aws_sdk_sts::Client::new(&self.sdk)

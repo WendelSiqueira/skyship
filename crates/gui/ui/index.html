@@ -166,8 +166,20 @@
           <input id="secret" type="password" class="mono" autocomplete="off" spellcheck="false">
         </label>
       </div>
+      <fieldset class="radio-group" id="save-mode">
+        <legend data-i18n="c.saveTitle"></legend>
+        <label class="radio">
+          <input type="radio" name="save-mode" value="save" checked>
+          <span class="radio-body"><b data-i18n="c.saveYes"></b><span class="hint" data-i18n="c.saveYesDesc"></span></span>
+        </label>
+        <label class="radio">
+          <input type="radio" name="save-mode" value="session">
+          <span class="radio-body"><b data-i18n="c.saveNo"></b><span class="hint" data-i18n="c.saveNoDesc"></span></span>
+        </label>
+      </fieldset>
       <p class="hint" data-i18n="c.note"></p>
       <p id="connect-error" class="error" role="alert" hidden></p>
+
 
       <p class="hint" data-i18n="c.profilesHint"></p>
 
