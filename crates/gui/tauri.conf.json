@@ -31,6 +31,22 @@
       "icons/128x128@2x.png",
       "icons/icon.png",
       "icons/icon.ico"
-    ]
+    ],
+    "publisher": "skyship contributors",
+    "copyright": "Copyright (c) 2026 skyship contributors",
+    "category": "DeveloperTool",
+    "shortDescription": "Put your Docker app online on AWS without needing to know the cloud",
+    "longDescription": "skyship takes a Docker project, builds it on your computer, sends it to AWS (Lightsail or EC2) and gives you back a public address. It explains each step and can remove everything when you are done.",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": true,
+        "languages": [
+          "PortugueseBR",
+          "English",
+          "Spanish"
+        ]
+      }
+    }
   }
 }

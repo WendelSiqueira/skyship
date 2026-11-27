@@ -54,7 +54,8 @@ Things specific to Windows in the code:
   on Windows, so messages and `docker build` get plain `C:\...` paths.
 - In a release build of the desktop app (`windows_subsystem = "windows"`), check that no console
   window flashes when it runs `docker`; this has not been checked yet.
-- `.rar` needs `bsdtar`, which Windows ships as `tar.exe`, so `.rar` does not open there yet.
+- `.rar` goes through `bsdtar`, which Windows ships as `tar.exe` (the code uses it there); opening a
+  `.rar` on Windows has not been tried.
 - Git with `core.autocrlf=true` checks out shell scripts with CRLF; copied into a Linux image they
   fail with `/bin/sh^M: not found`. Use a `.gitattributes` with `*.sh text eol=lf` in the project.
 
@@ -107,17 +108,29 @@ Everything is in `.github/`; actions are pinned by commit hash (Dependabot propo
 - **`audit.yml`**: `cargo audit`, when the dependencies change, on `main` and every Monday.
   Vulnerabilities fail it; the informational warnings from Tauri/GTK
   (see [security.md](security.md)) do not.
-- **`release.yml`**: runs when a tag `vX.Y.Z` is pushed. It checks that the tag equals the workspace
-  version and that its commit is on `main`, runs the tests, builds `skyship` and `skyship-gui` in
-  release mode on Ubuntu 22.04, and creates a **draft** release with
-  `skyship-vX.Y.Z-x86_64-linux.tar.gz` and its `.sha256` (both programs, the licenses, the READMEs
-  and the terms). Publishing the draft is a manual step. The package carries a build provenance
-attestation signed by GitHub (which workflow, which commit); check a download with
-`gh attestation verify skyship-vX.Y.Z-x86_64-linux.tar.gz --repo WendelSiqueira/skyship`. The
-binaries themselves are not code-signed.
+  - `windows`: `cargo test --locked --workspace` on Windows (it is not a required check yet)
+- **`release.yml`**: builds the packages for users and, on a tag, creates a **draft** release.
+  - **Packages:** on Linux an AppImage and a `.deb` (Ubuntu 22.04); on Windows an NSIS installer
+    (`skyship_X.Y.Z_x64-setup.exe`, per user, no administrator needed) and a `-portable.zip` with
+    `skyship.exe` (terminal) and `skyship-gui.exe`. The desktop app is the product; the zip is for
+    running from a terminal and seeing the logs.
+  - **Rehearsal:** a pull request that touches `release.yml`, `tauri.conf.json` or the icons, or a
+    manual run, builds the same packages and keeps them as workflow artifacts for 7 days. Nothing is
+    tagged, attested or released. Download them from the run page and try them.
+  - **Tag `vX.Y.Z`:** the `check` job requires the tag to equal the workspace version (and the
+    version in `crates/gui/tauri.conf.json`) and its commit to be on `main`; `cargo audit` and the
+    tests must pass; the packages get a build provenance attestation signed by GitHub; and a draft
+    release is created with `SHA256SUMS`. A `0.x` version is marked as a pre-release. Publishing the
+    draft is a manual step. Check a download with `sha256sum -c SHA256SUMS` and
+    `gh attestation verify <file> --repo WendelSiqueira/skyship`.
+  - **Not signed yet:** the Windows installer is not code-signed, so SmartScreen warns ("More
+    info → Run anyway"). macOS is not built yet.
+  - `tauri-cli` is downloaded from the official releases with a pinned version and SHA-256
+    (`TAURI_CLI_*` in the workflow); update both together.
 
-To make a release: raise `version` in the root `Cargo.toml` through a pull request, merge it, tag
-that commit on `main` (`git tag vX.Y.Z && git push origin vX.Y.Z`), then review and publish the draft.
+To make a release: raise `version` in the root `Cargo.toml` **and** in `crates/gui/tauri.conf.json`
+through a pull request, merge it, tag that commit on `main` (`git tag vX.Y.Z && git push origin
+vX.Y.Z`), then review and publish the draft.
 
 Run the same checks locally before opening a pull request:
 
