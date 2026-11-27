@@ -1,0 +1,35 @@
+# Maintainer: skyship contributors
+#
+# Pacote para o Arch Linux que instala o app de desktop (só ele, não o CLI) a partir do .deb do release.
+# Usa o WebKitGTK do sistema, em vez de compilar. Não está no AUR: construa e instale assim, na pasta
+# deste arquivo:
+#
+#   makepkg -si
+#
+# Depois de publicar uma versão nova, atualize `pkgver` e as somas: `updpkgsums`.
+pkgname=skyship-bin
+_name=skyship
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Put your Docker app online on AWS (Lightsail or EC2) without needing to know the cloud'
+arch=('x86_64')
+url='https://github.com/WendelSiqueira/skyship'
+license=('MIT' 'Apache-2.0')
+depends=('webkit2gtk-4.1' 'gtk3')
+optdepends=('docker: build and run containers (the app needs Docker running to publish)')
+options=('!strip' '!debug')
+_deb="${_name}_${pkgver}_amd64.deb"
+source=("${_deb}::${url}/releases/download/v${pkgver}/${_deb}"
+        "LICENSE-MIT::${url}/raw/v${pkgver}/LICENSE-MIT"
+        "LICENSE-APACHE::${url}/raw/v${pkgver}/LICENSE-APACHE")
+noextract=("${_deb}")
+# Sem o release publicado não há o que conferir: rode `updpkgsums` depois de publicar.
+sha256sums=('SKIP' 'SKIP' 'SKIP')
+
+package() {
+  mkdir -p "${srcdir}/deb"
+  bsdtar -xf "${srcdir}/${_deb}" -C "${srcdir}/deb"
+  bsdtar -xf "${srcdir}"/deb/data.tar.* -C "${pkgdir}"
+  install -Dm644 "${srcdir}/LICENSE-MIT" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE-MIT"
+  install -Dm644 "${srcdir}/LICENSE-APACHE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE-APACHE"
+}
