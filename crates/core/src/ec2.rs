@@ -485,6 +485,7 @@ fn ids_of_instances(out: &aws_sdk_ec2::operation::describe_instances::DescribeIn
 pub async fn destroy(sdk: &aws_config::SdkConfig, cfg: &Config, p: &Progress) -> Result<()> {
     let ec2 = aws_sdk_ec2::Client::new(sdk);
     let ids: Vec<String> = find_instances(&ec2, cfg).await?.into_iter().map(|i| i.0).collect();
+    let mut instance_gone = true;
     if ids.is_empty() {
         p.log("nenhuma instância para remover");
     } else {
@@ -495,11 +496,20 @@ pub async fn destroy(sdk: &aws_config::SdkConfig, cfg: &Config, p: &Progress) ->
             .await?;
         if let Err(e) = wait_terminated(&ec2, &ids).await {
             p.log(format!("{e:#}"));
+            instance_gone = false;
         }
     }
     delete_security_group(&ec2, cfg, p).await;
     delete_ecr_repository(sdk, cfg, p).await;
-    delete_role_and_profile(sdk, cfg, p).await;
+    if instance_gone {
+        delete_role_and_profile(sdk, cfg, p).await;
+    } else {
+        // o IAM não impede apagar a role de uma instância que ainda roda: só depois que ela terminar
+        p.log(format!(
+            "a instância ainda não terminou; a role {} foi mantida (remova o app de novo mais tarde)",
+            res_name(cfg)
+        ));
+    }
     Ok(())
 }
 
@@ -610,8 +620,31 @@ fn same_json(a: &str, b: &str) -> bool {
     }
 }
 
+/// Resultado da conferência das outras regiões.
+enum OtherRegions {
+    /// Nenhuma instância do app em outra região.
+    Free,
+    /// Existe uma instância do app nesta região.
+    InUse(String),
+    /// Não foi possível conferir estas regiões (erro de rede, de permissão, limite de requisições...). Na
+    /// dúvida, a role não é apagada: o IAM não impede apagar uma role que uma instância em execução usa.
+    Unchecked(Vec<String>),
+}
+
+enum Probe {
+    Used,
+    Free,
+    Unknown,
+}
+
+/// Uma região recusa a consulta com estes códigos quando a conta não a habilitou (regiões opcionais), e nela
+/// não pode haver instâncias. Qualquer outro erro, ou nenhum código (falha de rede), é "não sei".
+fn region_is_simply_disabled(code: Option<&str>) -> bool {
+    matches!(code, Some("AuthFailure" | "OptInRequired"))
+}
+
 /// Alguma instância deste app existe em outra região? A role do IAM é global (vale para todas as regiões).
-async fn used_in_other_region(sdk: &aws_config::SdkConfig, cfg: &Config) -> Option<String> {
+async fn other_regions(sdk: &aws_config::SdkConfig, cfg: &Config) -> OtherRegions {
     let here = sdk.region().map(|r| r.to_string()).unwrap_or_default();
     let mut set = tokio::task::JoinSet::new();
     for r in crate::regions::REGIONS.iter().filter(|r| r.code != here) {
@@ -623,7 +656,7 @@ async fn used_in_other_region(sdk: &aws_config::SdkConfig, cfg: &Config) -> Opti
         let name = cfg.name.clone();
         set.spawn(async move {
             let ec2 = aws_sdk_ec2::Client::new(&conf);
-            let out = ec2
+            let probe = match ec2
                 .describe_instances()
                 .filters(Filter::builder().name("tag:skyship:name").values(&name).build())
                 .filters(
@@ -637,20 +670,33 @@ async fn used_in_other_region(sdk: &aws_config::SdkConfig, cfg: &Config) -> Opti
                 )
                 .send()
                 .await
-                .ok()?; // região não habilitada ou sem acesso: ignora
-            out.reservations()
-                .iter()
-                .any(|x| !x.instances().is_empty())
-                .then(|| r.code.to_string())
+            {
+                Ok(out) if out.reservations().iter().any(|x| !x.instances().is_empty()) => Probe::Used,
+                Ok(_) => Probe::Free,
+                Err(e) if region_is_simply_disabled(e.code()) => Probe::Free,
+                Err(_) => Probe::Unknown,
+            };
+            (r.code, probe)
         });
     }
+    let mut unchecked = vec![];
     while let Some(res) = set.join_next().await {
-        if let Ok(Some(region)) = res {
-            set.abort_all();
-            return Some(region);
+        match res {
+            Ok((region, Probe::Used)) => {
+                set.abort_all();
+                return OtherRegions::InUse(region.to_string());
+            }
+            Ok((region, Probe::Unknown)) => unchecked.push(region.to_string()),
+            Ok((_, Probe::Free)) => {}
+            Err(_) => unchecked.push("?".to_string()), // a consulta nem terminou: não sei
         }
     }
-    None
+    if unchecked.is_empty() {
+        OtherRegions::Free
+    } else {
+        unchecked.sort();
+        OtherRegions::Unchecked(unchecked)
+    }
 }
 
 /// Apaga a role e o instance profile `skyship-<nome>`, se forem do skyship: mesma política de confiança, só
@@ -692,11 +738,21 @@ async fn delete_role_and_profile(sdk: &aws_config::SdkConfig, cfg: &Config, p: &
         ));
         return;
     }
-    if let Some(region) = used_in_other_region(sdk, cfg).await {
-        p.log(format!(
-            "a role {name} também é usada por uma instância em {region}; mantida"
-        ));
-        return;
+    match other_regions(sdk, cfg).await {
+        OtherRegions::Free => {}
+        OtherRegions::InUse(region) => {
+            p.log(format!(
+                "a role {name} também é usada por uma instância em {region}; mantida"
+            ));
+            return;
+        }
+        OtherRegions::Unchecked(regions) => {
+            p.log(format!(
+                "não consegui conferir se o app também roda em {}; a role {name} foi mantida por segurança (tente de novo, ou remova à mão)",
+                regions.join(", ")
+            ));
+            return;
+        }
     }
     // o profile primeiro: ele guarda a role
     if iam
@@ -739,7 +795,7 @@ async fn delete_role_and_profile(sdk: &aws_config::SdkConfig, cfg: &Config, p: &
 
 #[cfg(test)]
 mod tests {
-    use super::{TRUST, http_responds, percent_decode, same_json, summarize_checks};
+    use super::{TRUST, http_responds, percent_decode, region_is_simply_disabled, same_json, summarize_checks};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     #[test]
@@ -773,6 +829,19 @@ mod tests {
         // espaços e a ordem das chaves não importam
         let reordered = r#"{ "Statement": [ { "Action": "sts:AssumeRole", "Principal": { "Service": "ec2.amazonaws.com" }, "Effect": "Allow" } ], "Version": "2012-10-17" }"#;
         assert!(same_json(reordered, TRUST));
+    }
+
+    #[test]
+    fn only_a_disabled_region_counts_as_having_no_instances() {
+        // região opcional não habilitada: a conta não pode ter instâncias lá
+        assert!(region_is_simply_disabled(Some("AuthFailure")));
+        assert!(region_is_simply_disabled(Some("OptInRequired")));
+        // qualquer outra falha, ou nenhuma resposta (rede), é "não sei": a role deve ficar
+        assert!(!region_is_simply_disabled(None));
+        assert!(!region_is_simply_disabled(Some("UnauthorizedOperation")));
+        assert!(!region_is_simply_disabled(Some("RequestLimitExceeded")));
+        assert!(!region_is_simply_disabled(Some("InternalError")));
+        assert!(!region_is_simply_disabled(Some("")));
     }
 
     fn rt() -> tokio::runtime::Runtime {

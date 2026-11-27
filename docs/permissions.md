@@ -230,6 +230,11 @@ profile `skyship-<name>`. Nothing it did not create is touched:
 - the role is only deleted if its trust policy is exactly skyship's, it has no policy besides the
   two managed ones, and no instance of the same app exists in another region (the IAM role is
   global, shared by every region);
+- IAM does not stop you from deleting a role that a running instance uses, so skyship is careful
+  with it: the role is **kept** if the app's instance has not finished terminating, and also if it
+  could not check one of the other regions (a network or permission error; only a region that the
+  account has not enabled counts as empty). The log names the region it could not check, and
+  removing the app again later finishes the job;
 - anything that cannot be deleted is kept, and the log says why.
 
 The cleanup also runs when there is no instance left (to clean up after an earlier removal): remove

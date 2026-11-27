@@ -53,7 +53,8 @@ enum Cmd {
     Deploy,
     /// Mostra o estado do deploy
     Status,
-    /// Remove a infraestrutura de compute (instância ou service)
+    /// Remove o app: o service do Lightsail ou, na EC2, a instância e o que o skyship criou para ela
+    /// (security group, repositório do ECR com as imagens, role e instance profile do IAM)
     Destroy {
         #[arg(long)]
         yes: bool,
@@ -170,8 +171,13 @@ async fn main() -> Result<()> {
         Cmd::Destroy { yes } => {
             let cfg = Config::load()?;
             if !yes {
+                let extra = if cfg.target == Target::Ec2 {
+                    ", incluindo o security group, o repositório do ECR (com as imagens) e a role e o profile do IAM que o skyship criou para ele"
+                } else {
+                    ""
+                };
                 bail!(
-                    "isso apaga a infraestrutura de {} ({:?}); repita com --yes",
+                    "isso apaga o app {} ({:?}){extra}; repita com --yes",
                     cfg.name,
                     cfg.target
                 );

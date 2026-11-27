@@ -232,6 +232,11 @@ group, o repositório do ECR `skyship/<nome>` (com as imagens) e a role e o inst
 - a role só é apagada se a política de confiança for exatamente a do skyship, se não tiver outra
   política além das duas gerenciadas e se não houver instância do mesmo app em outra região (a role
   do IAM é global, vale para todas as regiões);
+- o IAM não impede apagar uma role que uma instância em execução usa, então o skyship tem cuidado
+  com ela: a role é **mantida** se a instância do app ainda não terminou de encerrar, e também se não
+  foi possível conferir alguma das outras regiões (erro de rede ou de permissão; só uma região que a
+  conta não habilitou conta como vazia). O log diz qual região não deu para conferir, e remover o
+  app de novo mais tarde conclui o trabalho;
 - o que não puder ser apagado é mantido, e o log diz por quê.
 
 A limpeza também roda quando não sobrou instância (para limpar o resto de uma remoção anterior):
