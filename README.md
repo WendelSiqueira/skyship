@@ -52,10 +52,22 @@ There is also a desktop app, in Portuguese, English and Spanish, with a light an
 lists the apps in your account, publishes new ones, updates existing ones and removes them. It can
 suggest what to publish from your local Docker and, if you turn it on, check the image with
 [Trivy](https://trivy.dev) (run as a Docker container) for secrets and serious vulnerabilities
-before publishing. What it may do on your computer is chosen in its Settings. It is not part of the
-default build: run
-`cargo build -p skyship-gui` and then `./target/debug/skyship-gui` (more in
-[docs/development.md](docs/development.md)).
+before publishing. What it may do on your computer is chosen in its Settings.
+
+### Installing the programs
+
+There is nothing to install besides the programs themselves: build them, then run them from where they
+are or copy them wherever you like.
+
+- **Command line:** `cargo build --release` leaves `skyship` (`skyship.exe`) in `target/release/`.
+  `cargo install --path crates/cli` puts it in your Cargo `bin` folder instead.
+- **Desktop app:** it is not part of the default build. Before building it, install what it needs:
+  on Linux the WebKitGTK 4.1 development libraries (`webkit2gtk-4.1` on Arch,
+  `libwebkit2gtk-4.1-dev` on Debian and Ubuntu; see the
+  [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)), on Windows the Visual Studio
+  Build Tools. Then `cargo build --release -p skyship-gui` and run `target/release/skyship-gui`
+  (more in [docs/development.md](docs/development.md)).
+- To remove everything, see [Uninstall](#uninstall).
 
 ### Giving skyship access to your account
 
@@ -73,6 +85,24 @@ needs. Step by step instructions are in [docs/permissions.md](docs/permissions.m
 | `deploy` to Lightsail | Works, including updating an app that already exists. Tested from the desktop app (new accounts can have a limit of zero container services; you may need to ask AWS to raise it). |
 | `deploy` to EC2 | Works, including updating an app. Tested from the desktop app. The address is plain `http://`: the EC2 destination has no HTTPS. |
 | Desktop app | Works on AWS: deploying, updating and removing apps on Lightsail and EC2, the apps list and the skyship tag, the Trivy check, and publishing from a project folder, a local image or an archive. |
+
+## Uninstall
+
+1. **Remove your apps first.** Uninstalling skyship does **not** remove what it published: an app
+   keeps running (and billing) until you remove it. Use **Remove** in the desktop app (Apps), or
+   `skyship destroy --yes` in the app's folder. When you remove an app, skyship also deletes what it
+   created for it (on EC2: the security group, the ECR repository with its images, and the IAM role and
+   profile).
+2. **Remove the program.** It was built from source, so delete the folder you cloned (the programs are
+   in its `target/` folder). If you ran `cargo install --path crates/cli`, run `cargo uninstall skyship`.
+3. **Remove what skyship saved on your computer.** Nothing is saved anywhere else.
+
+   | What | Where | Notes |
+   |---|---|---|
+   | AWS access keys (the profile `skyship`, if you used `skyship login` or the app) | `~/.aws/credentials` (Windows: `%USERPROFILE%\.aws\credentials`) | Delete the `[skyship]` block. **Also delete the access key in AWS** (IAM → Users → your user → Security credentials): removing the file does not cancel it. |
+   | The desktop app's settings, the terms you accepted, and the configuration of apps published from a local image | Linux: `~/.config/dev.skyship.gui` and `~/.local/share/dev.skyship.gui`. Windows: `%APPDATA%\dev.skyship.gui` and `%LOCALAPPDATA%\dev.skyship.gui` | Delete the folders. |
+   | Archives you opened in the app | `skyship-archive-*` in the temporary folder | Removed on the next start; safe to delete. |
+   | Docker leftovers | The local images `skyship-build/*` (one per Lightsail deploy) and, if you used the Trivy check, the image `aquasec/trivy:0.58.0` and the volume `skyship-trivy-cache` | `docker image rm $(docker image ls 'skyship-build/*' -q)` and `docker volume rm skyship-trivy-cache` |
 
 ## Questions
 
