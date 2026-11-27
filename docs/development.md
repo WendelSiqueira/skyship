@@ -152,8 +152,8 @@ with `cargo metadata --format-version 1 | jq -r '.packages[] | "\(.name) \(.lice
 
 - Extra permissions AWS may require on Lightsail (for example IAM) are unverified beyond what the
   deploys done so far needed.
-- The ECR lifecycle policy (keep the 3 most recent images) was written from the AWS documentation and has
-  never run against a real account. ECR applies it asynchronously.
+- The ECR lifecycle policy (keep the 3 most recent images) was set on a real account and checked there.
+  ECR applies it asynchronously, so older images can take up to about a day to disappear.
 - The EC2 cleanup on remove (security group, ECR repository, IAM role and profile) was run once against a
   real account, removing a test app: all four were deleted. The guards for an app that also runs in
   another region, and for an instance that does not finish terminating in time, have only unit tests.
