@@ -158,6 +158,10 @@ allows scripts only from the app itself).
 - The apps list marks the apps created by skyship (the `skyship:name` tag, `AppSummary.managed`).
   The Remove button is disabled for the others unless the setting "allow deleting apps skyship did
   not create" (`delete_unmanaged`, off by default) is on; the backend enforces it too.
+- When a removal is confirmed the app's card turns into "Removing…" at once (state pill, and the Open,
+  Copy and Remove buttons inactive) and stays that way until the app is gone: while the cleanup runs
+  (on EC2 it waits for the instance to terminate), and afterwards while the list still shows it as
+  `DELETING`. If the removal fails the card goes back to normal and the error shows above the list.
 - The apps list reloads itself every 10 seconds while an app is in a transitional state
   (`PENDING`, `DEPLOYING`, `UPDATING`, …) and the Apps screen is open, for up to 20 minutes; a
   failed reload keeps the list on screen. The Refresh button reloads on demand.

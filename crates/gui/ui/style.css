@@ -284,3 +284,5 @@ button.foot-text:focus-visible { outline: 2px solid var(--accent); outline-offse
 .log-timer:empty { display: none; }
 .danger-text { color: var(--danger-btn); }
 .state.bad { background: var(--danger-bg); color: var(--danger-title); border-color: transparent; }
+.app-card.removing { opacity: .65; }
+.app-card.removing .btn { pointer-events: none; }
