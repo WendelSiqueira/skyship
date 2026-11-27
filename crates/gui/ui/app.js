@@ -76,7 +76,6 @@ const state = {
   checking: false, // verificando conta e apps na abertura
   appsRegion: null, // região da lista de apps
   warnOpen: false, // detalhes completos do aviso da lista de apps abertos
-  savedProfiles: [], // perfis que o próprio app gravou em ~/.aws/credentials
   deleteUnmanaged: false, // pode apagar serviços sem a tag do skyship (desligado por padrão)
   scanImages: false, // verificar a imagem com o Trivy antes de publicar
   trivy: null, // o Docker responde para rodar o Trivy? (null = ainda não checado)
@@ -312,42 +311,6 @@ function renderConnect() {
   } else {
     note.hidden = true;
   }
-  // chaves que o app gravou neste computador: dá para apagá-las dali
-  const saved = state.savedProfiles || [];
-  $('#saved-keys').hidden = saved.length === 0;
-  if (saved.length) $('#saved-keys-text').textContent = t('c.savedText', { profile: saved.join(', ') });
-}
-
-/** Apaga do arquivo de credenciais as chaves que este app gravou (com confirmação). */
-async function removeSavedKeys() {
-  const profile = (state.savedProfiles || [])[0];
-  if (!profile) return;
-  const yes = await confirmModal({
-    title: t('c.removeSavedTitle'),
-    text: t('c.removeSavedText', { profile }),
-    yes: t('c.removeSavedYes'),
-    no: t('l.confirmNo'),
-  });
-  if (!yes) return;
-  const err = $('#connect-error');
-  try {
-    await invoke('remove_saved_profile', { profile });
-  } catch (e) {
-    showError(err, String(e));
-    return;
-  }
-  state.savedProfiles = state.savedProfiles.filter((p) => p !== profile);
-  if (store.get('profile') === profile) store.del('profile');
-  if (state.profile === profile) { // estava conectado com essas chaves: desconecta
-    state.account = null;
-    state.profile = null;
-    state.apps = null;
-  }
-  showError(err, '');
-  renderAll();
-  const note = $('#connected-note');
-  note.textContent = t('c.removedSaved');
-  note.hidden = false;
 }
 
 /* ---------- perfis AWS deste computador ---------- */
@@ -529,7 +492,6 @@ async function connectWithKeys() {
     } else {
       const res = await invoke('save_credentials', { profile: DEFAULT_PROFILE, keyId, secret, region: DEFAULT_REGION });
       $('#secret').value = '';
-      try { state.savedProfiles = (await invoke('get_settings')).savedProfiles || []; } catch { /* mantém */ }
       useAccount(DEFAULT_PROFILE, res.account);
     }
   } catch (e) {
@@ -1544,7 +1506,6 @@ function wire() {
   $('#app-name').addEventListener('input', () => { state.draft.typedName = true; readProjectForm(); renderUpdateNote(); });
   $('#app-port').addEventListener('input', () => { state.draft.typedPort = true; });
   $('#publish').addEventListener('click', publish);
-  $('#remove-saved').addEventListener('click', removeSavedKeys);
 
   // deploy
   $('#deploy-cancel').addEventListener('click', () => invoke('cancel_deploy'));
@@ -1600,7 +1561,6 @@ async function init() {
     state.dockerList = s.dockerList;
     state.scanImages = s.scanImages;
     state.deleteUnmanaged = s.deleteUnmanaged;
-    state.savedProfiles = s.savedProfiles || [];
   } catch { /* usa os padrões */ }
   await TAURI.event.listen('deploy-event', (e) => onDeployEvent(e.payload));
   applyI18n();

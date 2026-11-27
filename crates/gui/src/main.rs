@@ -200,13 +200,7 @@ async fn docker_ok() -> bool {
 
 /// Valida as chaves na AWS e só então grava o perfil em `~/.aws/credentials`.
 #[tauri::command]
-async fn save_credentials(
-    app: AppHandle,
-    profile: String,
-    key_id: String,
-    secret: String,
-    region: String,
-) -> CmdResult<Account> {
+async fn save_credentials(profile: String, key_id: String, secret: String, region: String) -> CmdResult<Account> {
     if profile.is_empty()
         || !profile
             .chars()
@@ -216,13 +210,6 @@ async fn save_credentials(
     }
     let id = login::verify(&key_id, &secret, &region).await.map_err(err)?;
     login::save_profile(&profile, &key_id, &secret).map_err(err)?;
-    // lembra que foi este app que gravou o perfil: só esses ele pode apagar depois
-    let dir = config_dir(&app);
-    let mut s = settings::load(&dir);
-    if !s.saved_profiles.contains(&profile) {
-        s.saved_profiles.push(profile.clone());
-        settings::save(&dir, &s).map_err(|e| e.to_string())?;
-    }
     Ok(Account {
         account: id.account,
         arn: id.arn,
@@ -399,20 +386,6 @@ fn forget_session(session: State<'_, SessionCreds>) {
     *session.0.lock().unwrap() = None;
 }
 
-/// Apaga de `~/.aws/credentials` um perfil que ESTE app gravou. Não cancela a chave na AWS.
-#[tauri::command]
-fn remove_saved_profile(app: AppHandle, profile: String) -> CmdResult<bool> {
-    let dir = config_dir(&app);
-    let mut s = settings::load(&dir);
-    if !s.saved_profiles.contains(&profile) {
-        return Err("esse perfil não foi gravado por este app, então ele não o apaga".into());
-    }
-    let existed = login::remove_profile(&profile).map_err(err)?;
-    s.saved_profiles.retain(|p| p != &profile);
-    settings::save(&dir, &s).map_err(|e| e.to_string())?;
-    Ok(existed)
-}
-
 fn main() {
     // WebKitGTK com Wayland e placa NVIDIA derruba o app logo na abertura ("Error 71 (Protocol
     // error) dispatching to Wayland display"). Desligar o renderizador DMABUF evita isso e custa
@@ -439,7 +412,6 @@ fn main() {
             save_credentials,
             use_credentials_session,
             forget_session,
-            remove_saved_profile,
             check_profile,
             inspect_project,
             save_config,

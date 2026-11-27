@@ -23,9 +23,6 @@ pub struct Settings {
     /// Desligado por padrão: a pessoa precisa liberar de propósito.
     #[serde(default)]
     pub delete_unmanaged: bool,
-    /// Perfis que ESTE app gravou em `~/.aws/credentials`. Só esses podem ser apagados por ele.
-    #[serde(default)]
-    pub saved_profiles: Vec<String>,
 }
 
 fn yes() -> bool {
@@ -39,7 +36,6 @@ impl Default for Settings {
             docker_list: None,
             scan_images: false,
             delete_unmanaged: false,
-            saved_profiles: vec![],
         }
     }
 }
@@ -96,7 +92,6 @@ mod tests {
             docker_list: Some(true),
             scan_images: true,
             delete_unmanaged: true,
-            saved_profiles: vec![],
         };
         save(&d, &s).unwrap();
         assert_eq!(load(&d), s);
@@ -120,7 +115,6 @@ mod tests {
             docker_list: Some(false),
             scan_images: false,
             delete_unmanaged: false,
-            saved_profiles: vec![],
         })
         .unwrap();
         assert!(j.contains("readProfiles") && j.contains("dockerList"));

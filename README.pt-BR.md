@@ -82,7 +82,7 @@ que o skyship precisa. O passo a passo está em [docs/permissions.pt-BR.md](docs
 que acontece depois: salvá-las no computador, em `~/.aws/credentials` (permissões restritas no Linux e
 no macOS, as da sua pasta de usuário no Windows; qualquer programa que rode como você lê esse arquivo),
 ou usá-las só agora, na memória do app, e elas somem quando você o fecha (só no app de desktop; nada é
-gravado no computador). O app consegue apagar as chaves que salvou (botão na tela de Credenciais). Use o usuário dedicado de
+gravado no computador). O app não apaga as chaves salvas depois: para removê-las, apague o perfil `[skyship]` desse arquivo e a chave de acesso na AWS (IAM → Users → Security credentials). Use o usuário dedicado de
 [docs/permissions.pt-BR.md](docs/permissions.pt-BR.md), nunca a sua conta principal. Mais detalhes em
 [docs/security.md](docs/security.md).
 
