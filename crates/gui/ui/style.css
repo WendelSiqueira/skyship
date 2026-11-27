@@ -284,3 +284,14 @@ button.foot-text:focus-visible { outline: 2px solid var(--accent); outline-offse
 .log-timer:empty { display: none; }
 .danger-text { color: var(--danger-btn); }
 .state.bad { background: var(--danger-bg); color: var(--danger-title); border-color: transparent; }
+
+/* Credenciais: salvar no computador ou usar só nesta sessão */
+.radio-group { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.radio-group legend { font-size: 13px; font-weight: 600; padding: 0; margin-bottom: 6px; }
+.radio { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; border: 1px solid var(--input-border); border-radius: 10px; background: var(--surface); cursor: pointer; }
+.radio:has(input:checked) { border: 2px solid var(--accent); padding: 9px 13px; }
+.radio input[type="radio"] { width: 16px; height: 16px; min-width: 16px; padding: 0; margin: 2px 0 0; accent-color: var(--accent); flex: none; }
+.radio-body { flex: 1; min-width: 0; }
+.radio-body { display: flex; flex-direction: column; gap: 3px; font-size: 14px; }
+.saved-keys { display: flex; align-items: center; gap: 14px; padding: 14px 16px; }
+.saved-title { font-weight: 600; font-size: 14px; }

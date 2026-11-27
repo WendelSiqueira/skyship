@@ -227,6 +227,59 @@ pub fn save_profile(profile: &str, key_id: &str, secret: &str) -> Result<PathBuf
     Ok(path)
 }
 
+/// Tira o bloco `[profile]` do texto do arquivo de credenciais, preservando o resto. Devolve o novo texto e se
+/// o bloco existia.
+pub fn remove_profile_block(content: &str, profile: &str) -> (String, bool) {
+    let header = format!("[{profile}]");
+    let lines: Vec<&str> = content.lines().collect();
+    let Some(start) = lines.iter().position(|l| l.trim() == header) else {
+        return (content.to_string(), false);
+    };
+    let end = lines[start + 1..]
+        .iter()
+        .position(|l| l.trim_start().starts_with('['))
+        .map(|i| start + 1 + i)
+        .unwrap_or(lines.len());
+    let mut kept: Vec<&str> = lines[..start].to_vec();
+    // a linha em branco que separava o bloco do anterior vai junto com ele
+    while kept.last().is_some_and(|l| l.trim().is_empty()) {
+        kept.pop();
+    }
+    let rest = &lines[end..];
+    let mut out = String::new();
+    for l in &kept {
+        out.push_str(l);
+        out.push('\n');
+    }
+    if !kept.is_empty() && !rest.is_empty() {
+        out.push('\n');
+    }
+    for l in rest {
+        out.push_str(l);
+        out.push('\n');
+    }
+    (out, true)
+}
+
+/// Apaga o perfil de `~/.aws/credentials`. Devolve se ele existia. Se o arquivo ficar vazio, ele é apagado.
+/// Isso NÃO cancela a chave na AWS: quem fez a chave precisa apagá-la no IAM.
+pub fn remove_profile(profile: &str) -> Result<bool> {
+    let path = credentials_path()?;
+    let Ok(current) = std::fs::read_to_string(&path) else {
+        return Ok(false);
+    };
+    let (updated, existed) = remove_profile_block(&current, profile);
+    if !existed {
+        return Ok(false);
+    }
+    if updated.trim().is_empty() {
+        std::fs::remove_file(&path)?;
+    } else {
+        write_private(&path, &updated)?;
+    }
+    Ok(true)
+}
+
 /// Substitui (ou acrescenta) o bloco `[profile]` preservando o resto do arquivo.
 pub fn upsert_profile(content: &str, profile: &str, key_id: &str, secret: &str) -> String {
     let header = format!("[{profile}]");
@@ -289,7 +342,7 @@ fn write_private(path: &PathBuf, content: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_profile_names, policy, upsert_profile};
+    use super::{parse_profile_names, policy, remove_profile_block, upsert_profile};
     use crate::config::Target;
 
     #[test]
@@ -319,6 +372,38 @@ mod tests {
         assert!(out.contains("[b]\ny = 2"));
         assert!(out.contains("aws_access_key_id = NEW"));
         assert!(!out.contains("OLD"));
+    }
+
+    #[test]
+    fn removes_only_its_block_and_keeps_the_rest() {
+        let src = "[a]\nx = 1\n\n[skyship]\naws_access_key_id = K\naws_secret_access_key = S\n\n[b]\ny = 2\n";
+        let (out, existed) = remove_profile_block(src, "skyship");
+        assert!(existed);
+        assert_eq!(out, "[a]\nx = 1\n\n[b]\ny = 2\n");
+        assert!(!out.contains("aws_secret_access_key"));
+    }
+
+    #[test]
+    fn removing_the_last_or_only_block_leaves_a_clean_file() {
+        let (out, existed) = remove_profile_block("[a]\nx = 1\n\n[skyship]\nk = v\n", "skyship");
+        assert!(existed);
+        assert_eq!(out, "[a]\nx = 1\n");
+        let (only, _) = remove_profile_block("[skyship]\nk = v\n", "skyship");
+        assert!(only.trim().is_empty());
+        let (first, _) = remove_profile_block("[skyship]\nk = v\n\n[b]\ny = 2\n", "skyship");
+        assert_eq!(first, "[b]\ny = 2\n");
+    }
+
+    #[test]
+    fn removing_a_missing_profile_changes_nothing() {
+        let src = "[a]\nx = 1\n";
+        let (out, existed) = remove_profile_block(src, "skyship");
+        assert!(!existed);
+        assert_eq!(out, src);
+        // não confunde com um perfil de nome parecido
+        let (out, existed) = remove_profile_block("[skyship2]\nk = v\n", "skyship");
+        assert!(!existed);
+        assert_eq!(out, "[skyship2]\nk = v\n");
     }
 
     fn statements(target: Target) -> Vec<serde_json::Value> {
